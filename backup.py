@@ -41,20 +41,23 @@ class Car:
         # Other car moves down the screen at (ego_speed - other.speed)
         # Positive -> moves down, Negative -> moves up
         theta, a = U  # acceleration, steering angle
+        v_dot = a  # acceleration
+        self.speed += v_dot * dt
+        phi_dot = self.speed * math.tan(theta) / CAR_LENGTH  # simple bicycle model
+        self.heading += phi_dot * dt
         x_dot = self.speed * -math.sin(self.heading)
         y_dot = self.speed * math.cos(self.heading)
-        v_dot = a  # acceleration
-        phi_dot = self.speed * math.tan(theta) / CAR_LENGTH  # simple bicycle model
         self.x += x_dot * dt
         self.y += y_dot * dt
-        self.speed += v_dot * dt
-        self.heading += phi_dot * dt
+        print(x_dot, y_dot, math.degrees(self.heading))
 
-    def draw(self, screen):
-        car_rect = pygame.Rect(0, 0, CAR_WIDTH, CAR_LENGTH)
-        car_rect.center = (int(self.x), int(self.y))
-        pygame.draw.rect(screen, self.color, car_rect)
-
+    def draw(self, screen:pygame.surface.Surface, ego, heading=0.0):
+        car_surf = pygame.surface.Surface((CAR_WIDTH, CAR_LENGTH),pygame.SRCALPHA)
+        car_surf.fill(self.color)
+        if not ego: car_surf = pygame.transform.rotate(car_surf, math.degrees(heading))
+        car_rect = car_surf.get_rect()
+        car_rect.center = (int(self.x), int(SCREEN_HEIGHT * 0.75)) if ego else (int(self.x), int(self.y))
+        screen.blit(car_surf, car_rect)
 
 # -----------------------
 # Draw Lane Lines
@@ -117,6 +120,10 @@ def main():
             ego_car.speed += 0.1
         if keys[pygame.K_DOWN]:
             ego_car.speed = max(0.0, ego_car.speed - 0.1)
+        if keys[pygame.K_LEFT]:
+            ego_car.heading += math.radians(1.0)
+        if keys[pygame.K_RIGHT]:
+            ego_car.heading -= math.radians(1.0)
 
         # --- Road scrolls down at ego_car.speed (pixel units per frame) ---
         lane_offset += ego_car.speed
@@ -131,10 +138,10 @@ def main():
         draw_lane_lines(screen, lane_offset)
 
         # --- Draw the single traffic car ---
-        other_car.draw(screen)
+        other_car.draw(screen, False, heading=(other_car.heading-ego_car.heading))
 
         # --- Draw ego car fixed on screen ---
-        ego_car.draw(screen)
+        ego_car.draw(screen, True)
 
         # HUD (small readout)
         font = pygame.font.SysFont(None, 20)

@@ -29,22 +29,27 @@ YELLOW = (255, 255, 0)
 # Car Class (screen coords)
 # -----------------------
 class Car:
-    def __init__(self, x, y, speed=0.0, color=BLUE):
+    def __init__(self, x, y, speed=0.0, heading=0.0, color=BLUE):
         self.x = x
         self.y = float(y)   # pixel coordinate on screen (float for smooth updates)
         self.speed = float(speed)  # absolute forward speed in "world" terms
         self.color = color
+        self.heading = heading
 
-    def update(self, ego_speed):
+    def update(self, ego_speed, ego_heading):
         # Other car moves down the screen at (ego_speed - other.speed)
         # Positive -> moves down, Negative -> moves up
         relative_speed = ego_speed - self.speed
         self.y += relative_speed
+        self.heading -= ego_heading
 
-    def draw(self, screen):
-        car_rect = pygame.Rect(0, 0, CAR_WIDTH, CAR_LENGTH)
+    def draw(self, screen:pygame.surface.Surface):
+        car_surf = pygame.surface.Surface((CAR_WIDTH, CAR_LENGTH),pygame.SRCALPHA)
+        car_surf.fill(self.color)
+        car_surf = pygame.transform.rotate(car_surf,self.heading)
+        car_rect = car_surf.get_rect()
         car_rect.center = (int(self.x), int(self.y))
-        pygame.draw.rect(screen, self.color, car_rect)
+        screen.blit(car_surf, car_rect)
 
 
 # -----------------------
@@ -85,7 +90,7 @@ def main():
     ego_car = Car(right_lane_x, int(SCREEN_HEIGHT * 0.75), speed=CAR_SPEED, color=BLUE)
 
     # Single traffic car (screen y starts up the screen)
-    other_car = Car(right_lane_x, SCREEN_HEIGHT * 0.25, speed=4.0, color=RED)
+    other_car = Car(right_lane_x, SCREEN_HEIGHT * 0.25, speed=4.0, heading = 10.0, color=RED)
 
     lane_offset = 0.0  # offset for lane dashes (in screen pixels)
 
@@ -110,7 +115,7 @@ def main():
         lane_offset += ego_car.speed
 
         # --- Update traffic car in screen coords ---
-        other_car.update(ego_car.speed)
+        other_car.update(ego_car.speed, ego_car.heading)
 
         # --- Draw road and lane dashes (they move down at ego_car.speed) ---
         road_rect = pygame.Rect((SCREEN_WIDTH - ROAD_WIDTH) // 2, 0, ROAD_WIDTH, SCREEN_HEIGHT)
