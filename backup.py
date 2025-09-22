@@ -50,14 +50,35 @@ class Car:
         self.x += x_dot * dt
         self.y += y_dot * dt
         print(x_dot, y_dot, math.degrees(self.heading))
+        return [x_dot * dt, y_dot * dt, phi_dot * dt]
 
-    def draw(self, screen:pygame.surface.Surface, ego, heading=0.0):
-        car_surf = pygame.surface.Surface((CAR_WIDTH, CAR_LENGTH),pygame.SRCALPHA)
+    def draw(self, screen:pygame.Surface, ego, heading=0.0):
+        car_surf = pygame.Surface((CAR_WIDTH, CAR_LENGTH),pygame.SRCALPHA)
         car_surf.fill(self.color)
         if not ego: car_surf = pygame.transform.rotate(car_surf, math.degrees(heading))
         car_rect = car_surf.get_rect()
         car_rect.center = (int(self.x), int(SCREEN_HEIGHT * 0.75)) if ego else (int(self.x), int(self.y))
         screen.blit(car_surf, car_rect)
+
+class Road:
+    def __init__(self, loc, infinite = False):
+        self.loc = loc
+        self.infinite = infinite
+        if infinite: 
+            road_surface = pygame.image.load(loc).convert()
+            self.surface = pygame.Surface((road_surface.get_width(),road_surface.get_height()*3))
+            self.surface.fill(GRAY)
+            road_rect = road_surface.get_rect()
+            road_rect.center = (self.surface.get_width()//2, self.surface.get_height()//2)
+            self.surface.blit(road_surface, road_rect)
+        else: self.surface = pygame.image.load(loc).convert()
+
+    def draw_road(self, delta):
+        self.surface.fill(GRAY)
+        road_rect = self.road_surface.get_rect()
+        road_rect.center = (road_rect.centerx+delta[0], road_rect.centery+delta[1])
+        # if road_rect.centery<
+
 
 # -----------------------
 # Draw Lane Lines
@@ -78,7 +99,6 @@ def draw_lane_lines(screen, offset):
             pygame.Rect(center_x - LANE_LINE_WIDTH // 2, int(dash_y), LANE_LINE_WIDTH, LANE_DASH_LENGTH)
         )
 
-
 # -----------------------
 # Main Simulation
 # -----------------------
@@ -87,11 +107,13 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Relative Motion: ego vs traffic (screen coords)")
     clock = pygame.time.Clock()
+    road = Road("roads/straight.png", True)
+
+    camera = pygame.Rect(0, 0, 800, 600)
 
     # lane x positions
     right_lane_x = SCREEN_WIDTH // 2 + ROAD_WIDTH // 4
     left_lane_x = SCREEN_WIDTH // 2 - ROAD_WIDTH // 4
-
 
     # Ego car (fixed on screen, as a Car object)
     ego_car = Car(right_lane_x, int(SCREEN_HEIGHT * 0.75), speed=CAR_SPEED, color=BLUE)
@@ -112,7 +134,7 @@ def main():
                 running = False
 
         U = get_motion_step() # U = control input: [steering angle, acceleration]
-        ego_car.update(U, dt)  # If you want to update ego_car with controls
+        ego_delta = ego_car.update(U, dt)  # If you want to update ego_car with controls
 
         # --- Input: change ego speed with up/down ---
         keys = pygame.key.get_pressed()
@@ -136,6 +158,9 @@ def main():
         road_rect = pygame.Rect((SCREEN_WIDTH - ROAD_WIDTH) // 2, 0, ROAD_WIDTH, SCREEN_HEIGHT)
         pygame.draw.rect(screen, BLACK, road_rect)
         draw_lane_lines(screen, lane_offset)
+
+        camera.center = (ego_car.x, ego_car.y)
+        road.draw_road(ego_delta)
 
         # --- Draw the single traffic car ---
         other_car.draw(screen, False, heading=(other_car.heading-ego_car.heading))
