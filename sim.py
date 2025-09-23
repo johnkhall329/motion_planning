@@ -3,6 +3,8 @@ import math
 import sys
 import random
 from planner import get_motion_step
+import cv2
+import numpy as np
 
 # -----------------------
 # Simulation Parameters
@@ -156,12 +158,19 @@ def main():
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
 
+        road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
+        road_bin = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
+        road_bin = cv2.resize(road_bin, (400,300))
+
+        cv2.imshow('binary road', road_bin)
+
         # HUD
         font = pygame.font.SysFont(None, 20)
         txt = font.render(f"ego_speed: {ego_car.speed:.2f}   other_speed: {other_car.speed:.2f}", True, WHITE)
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
+        cv2.waitKey(1)
 
     pygame.quit()
     sys.exit()
