@@ -48,8 +48,8 @@ class Car:
         self.y_dot = self.speed * math.cos(self.heading)
         # self.x += self.x_dot * dt
         # self.y += self.y_dot * dt
-        print(f"x: {self.x}, heading: {math.degrees(self.heading):.2f}, speed: {self.speed:.2f}")
-        print(f"x_dot: {self.x_dot:.2f}, y_dot: {self.y_dot:.2f}")
+        # print(f"x: {self.x}, heading: {math.degrees(self.heading):.2f}, speed: {self.speed:.2f}")
+        # print(f"x_dot: {self.x_dot:.2f}, y_dot: {self.y_dot:.2f}")
         return [self.x_dot * dt, self.y_dot * dt, phi_dot * dt]
 
     def draw(self, screen):
