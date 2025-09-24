@@ -79,6 +79,30 @@ def draw_lane_lines(screen, offset_y, offset_x):
             pygame.Rect(center_x - LANE_LINE_WIDTH // 2, int(dash_y),
                         LANE_LINE_WIDTH, LANE_DASH_LENGTH)
         )
+    pygame.draw.rect(
+        screen,
+        WHITE,
+        pygame.Rect(center_x - ROAD_WIDTH // 2,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
+    )
+    pygame.draw.rect(
+        screen,
+        WHITE,
+        pygame.Rect(center_x + ROAD_WIDTH // 2 - LANE_LINE_WIDTH,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
+    )
+
+def get_bin_road(screen):
+    road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
+    cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
+    lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
+    combined = cv2.bitwise_or(cars, lines)
+    combined = cv2.resize(combined, (400,300))
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10,10))
+    dilated = cv2.dilate(combined,kernel,iterations=2)
+    blured = cv2.GaussianBlur(dilated, (25,25),0)
+    return blured
+    
+
 
 
 # -----------------------
@@ -154,13 +178,10 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
+        road_bin = get_bin_road(screen)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
-
-        road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
-        road_bin = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
-        road_bin = cv2.resize(road_bin, (400,300))
 
         cv2.imshow('binary road', road_bin)
 
