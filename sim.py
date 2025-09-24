@@ -90,17 +90,30 @@ def draw_lane_lines(screen, offset_y, offset_x):
         pygame.Rect(center_x + ROAD_WIDTH // 2 - LANE_LINE_WIDTH,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
     )
 
-def get_bin_road(screen):
+def get_bin_road(screen, scale, ego:Car):
     road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
     cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
     lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
-    combined = cv2.bitwise_or(cars, lines)
-    combined = cv2.resize(combined, (400,300))
+    
+    cars_resize = cv2.resize(cars, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
+    lines_resize = cv2.resize(lines, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
+    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (12,12))
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    cars_dilute = cv2.dilate(cars_resize,dilute_kernel,iterations=5)
+    lines_dilute = cv2.dilate(lines_resize ,dilute_kernel,iterations=2)
+    combined = cv2.bitwise_or(cars_dilute, lines_dilute)
+    
+    # eroded = cv2.erode(combined,erode_kernel)
+    # dilated = cv2.dilate(eroded,dilute_kernel,iterations=3)
+    blurred = cv2.GaussianBlur(combined, (45,45),0)
+    road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (10,10))
-    dilated = cv2.dilate(combined,kernel,iterations=2)
-    blured = cv2.GaussianBlur(dilated, (25,25),0)
-    return blured
+    center = (int(ego.y)//scale, int(ego.x)//scale)
+    size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
+    box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
+    box_points = box_points.astype(np.int32)
+    cv2.drawContours(road, [box_points], 0, RED, -1)
+    return road
     
 
 
@@ -156,9 +169,9 @@ def main():
         if keys[pygame.K_DOWN]:
             ego_car.speed = max(0.0, ego_car.speed - 0.1)
         if keys[pygame.K_LEFT]:
-            ego_car.heading += math.radians(1.0)
+            ego_car.heading += math.radians(0.5)
         if keys[pygame.K_RIGHT]:
-            ego_car.heading -= math.radians(1.0)
+            ego_car.heading -= math.radians(0.5)
 
         # --- Road scrolls with ego motion ---
         lane_offset_y += ego_car.y_dot
@@ -178,7 +191,7 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
-        road_bin = get_bin_road(screen)
+        road_bin = get_bin_road(screen, 2, ego_car)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
