@@ -2,7 +2,7 @@ import pygame
 import math
 import sys
 import random
-from planner import get_motion_step
+from PathPlanning.planner import get_motion_step
 import cv2
 import numpy as np
 
@@ -17,6 +17,7 @@ ROAD_WIDTH_M = 7.0 # meters
 CAR_WIDTH = 40
 CAR_LENGTH = 60
 CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
+TURNING_RADIUS = 30.0 #Will need to recalculate based on maximum turning angle
 LANE_LINE_WIDTH = 5
 LANE_DASH_LENGTH = 40
 LANE_GAP = 20
