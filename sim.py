@@ -13,6 +13,7 @@ SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 FPS = 60
 ROAD_WIDTH = 200
+ROAD_WIDTH_M = 7.0 # meters
 CAR_WIDTH = 40
 CAR_LENGTH = 60
 CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
@@ -27,6 +28,21 @@ GRAY = (50, 50, 50)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
+
+PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
+METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
+
+def ppt_to_mph(ppt: float, dt) -> float:
+    '''
+    Convert pixels per tick to miles per hour
+    '''
+    return ppt * METERS_PER_PIXEL / dt * 2.23694  # 1 m/s = 2.23694 mph
+
+def ppt_to_kmh(ppt: float, dt) -> float:
+    '''
+    Convert pixels per tick to kilometers per hour
+    '''
+    return ppt * METERS_PER_PIXEL / dt * 3.6  # 1 m/s = 3.6 km/h
 
 # -----------------------
 # Car Class (screen coords)
@@ -200,7 +216,7 @@ def main():
 
         # HUD
         font = pygame.font.SysFont(None, 20)
-        txt = font.render(f"ego_speed: {ego_car.speed:.2f}   other_speed: {other_car.speed:.2f}", True, WHITE)
+        txt = font.render(f"ego_speed: {(ego_car.speed):.2f}   other_speed: {(other_car.speed):.2f}", True, WHITE)
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
