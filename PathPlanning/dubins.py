@@ -407,15 +407,15 @@ def _generate_local_course(lengths, modes, max_curvature, step_size):
 def main():
     print("Dubins path planner sample start!!")
 
-    start_x = 1.0  # [m]
-    start_y = 1.0  # [m]
-    start_yaw = np.deg2rad(45.0)  # [rad]
+    start_x = 350.0  # [m]
+    start_y = 325.0  # [m]
+    start_yaw = np.deg2rad(-90.0)  # [rad]
 
-    end_x = -3.0  # [m]
-    end_y = -3.0  # [m]
-    end_yaw = np.deg2rad(45.0)  # [rad]
+    end_x = 450.0  # [m]
+    end_y = 175.0  # [m]
+    end_yaw = np.deg2rad(-90.0)  # [rad]
 
-    curvature = 1.0
+    curvature = 1/30.0
 
     path_x, path_y, path_yaw, mode, lengths = plan_dubins_path(start_x,
                                                                start_y,
@@ -424,7 +424,7 @@ def main():
                                                                end_y,
                                                                end_yaw,
                                                                curvature)
-    
+    print(len(path_x))
     print(sum(lengths))
 
     if show_animation:
