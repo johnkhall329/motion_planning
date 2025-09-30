@@ -7,7 +7,7 @@ author Atsushi Sakai(@Atsushi_twi)
 """
 import sys
 import pathlib
-sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
+# sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 from math import sin, cos, atan2, sqrt, acos, pi, hypot
 import math

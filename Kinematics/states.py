@@ -1,5 +1,6 @@
 import math
-from sim import CAR_LENGTH, TURNING_RADIUS
+# from sim import CAR_LENGTH, TURNING_RADIUS
+CAR_LENGTH = 20
 
 class State():
     def __init__(self,x,y,v,theta):
