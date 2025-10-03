@@ -18,24 +18,24 @@ class Unconstrained():
         self.color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
         self.frontier.put((0,self.goal))
     
-    def get_unconstrained_path(self, start_state):
+    def get_unconstrained_path(self, start_state, step_size=5):
         self.replan_frontier(start_state)
         
         while not self.frontier.empty():
             item = self.frontier.get()
             curr_node = item[1]
          
-            if curr_node == start_state: # if it finds the goal, return a formatted path
+            if abs(curr_node[0]-start_state[0])<step_size and abs(curr_node[1]-start_state[1])<step_size: # if it finds the goal, return a formatted path
                 return self.format_path(curr_node),self.cost_so_far[curr_node]
             
-            for next_node in [(curr_node[0]-5, curr_node[1]),
-                              (curr_node[0], curr_node[1]+5),
-                              (curr_node[0]+5, curr_node[1]),
-                              (curr_node[0], curr_node[1]-5),
-                              (curr_node[0]+5, curr_node[1]+5),
-                              (curr_node[0]+5, curr_node[1]-5),
-                              (curr_node[0]-5, curr_node[1]+5),
-                              (curr_node[0]-5, curr_node[1]-5)]:
+            for next_node in [(curr_node[0]-step_size, curr_node[1]),
+                              (curr_node[0], curr_node[1]+step_size),
+                              (curr_node[0]+step_size, curr_node[1]),
+                              (curr_node[0], curr_node[1]-step_size),
+                              (curr_node[0]+step_size, curr_node[1]+step_size),
+                              (curr_node[0]+step_size, curr_node[1]-step_size),
+                              (curr_node[0]-step_size, curr_node[1]+step_size),
+                              (curr_node[0]-step_size, curr_node[1]-step_size)]:
                 if 0<=next_node[0]<self.map.shape[0] and 0<=next_node[1]<self.map.shape[1] and self.map[next_node] < 250:
                     new_cost = self.cost_so_far[curr_node] + np.float32(self.map[next_node]) + math.sqrt((curr_node[0]-next_node[0])**2 + (curr_node[1]-next_node[1])**2)
                     prev_cost = self.cost_so_far.get(next_node)
