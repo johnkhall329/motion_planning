@@ -37,10 +37,30 @@ def discritize(node, resolution=10, turning_a=np.pi/12):
     phi = (phi//turning_a)
     return (x,y,phi)
 
-def find_neighbors(node):
-    # x,y,phi = node
-    # return [left, straight, right]
-    pass
+def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
+    x,y,phi = node
+
+    # straight
+    dx = distance * -math.sin(phi)
+    dy = distance * -math.cos(phi)
+    straight = (x+dx,y+dy,phi)
+
+    # consts for turning
+    r = distance/turning_a
+    d = 2 * r * math.sin(turning_a/2)
+
+    # left
+    dx = d * -math.sin(phi + turning_a/2)
+    dy = d * -math.cos(phi + turning_a/2)
+    left = (x+dx,y+dy,phi+turning_a)
+
+    # right
+    dx = d * -math.sin(phi - turning_a/2)
+    dy = d * -math.cos(phi - turning_a/2)
+    right = (x+dx,y+dy,phi-turning_a)
+
+
+    return (left, straight, right)
 
 def get_heuristic(curr_state, goal, two_d_astar: Unconstrained):
     path = dubins(curr_state[0], curr_state[1], curr_state[2], goal[0], goal[1], goal[2], 1/TURNING_RADIUS)[4]
