@@ -17,11 +17,9 @@ def get_motion_step():
     a = 0.0      # No acceleration change
     return (theta, a)
 
-def get_heuristic(curr_state, goal, two_d_astar: Unconstrained):
-    path = dubins(curr_state.x, curr_state.y, curr_state.theta, goal.x, goal.y, goal.theta, 1/TURNING_RADIUS)[4]
-    h1 = sum(path)
-    _, h2 = len(two_d_astar.get_unconstrained_path((curr_state.x, curr_state.y)))
-    return max(h1,h2)
+
+
+
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
