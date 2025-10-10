@@ -18,9 +18,6 @@ def get_motion_step():
     return (theta, a)
 
 
-
-
-
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
     center = (350,300)
