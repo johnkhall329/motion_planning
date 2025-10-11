@@ -2,6 +2,7 @@ import numpy as np
 from queue import PriorityQueue
 import math 
 import cv2
+import time
 try:
     from PathPlanning.unconstrained import Unconstrained
     from PathPlanning.dubins import plan_dubins_path as dubins
@@ -12,7 +13,7 @@ except ModuleNotFoundError:
 D_HEADING = np.pi/12
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
-TURN_COST = 3
+TURN_COST = 10
 
 # a node is a continous (x,y,phi) tuple
 # phi is the heading angle in radians 
@@ -65,10 +66,10 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     return (left, straight, right)
 
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
-    path = dubins(curr_state[0], curr_state[1], curr_state[2], goal[0], goal[1], goal[2], 1/TURNING_RADIUS,step_size)[4]
+    dx,dy, _, _, path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)
     h1 = sum(path)
     u_path,h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
-    return max(h1,h2)
+    return max(h1,h2), dx,dy
 
 def hybrid_a_star_path(start_loc, goal_loc, map):
     frontier = PriorityQueue()
@@ -79,9 +80,9 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
     frontier.put((0,start_loc))
     goal_discretized = discritize(goal_loc)
     twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),map)
-    color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
-    cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
-    cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
+    # color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+    # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
+    # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     while not frontier.empty():
         item = frontier.get()
         curr_node = item[1]
@@ -97,14 +98,17 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
             
             if prev_cost is None or new_cost < prev_cost:    
                 cost_so_far[next_discritized] = new_cost
-                heuristic = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)  
+                heuristic,dubinsx,dubinsy = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)  
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node
-                cv2.circle(color_map,(int(curr_node[0]),int(curr_node[1])),3, (255,0,0),-1)
+                # for i in range(len(dubinsx)):
+                #     cv2.circle(color_map,(int(dubinsx[i]),int(dubinsy[i])),3, (0,0,255),-1)
+                # cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
+            # cv2.imshow('Progress', color_map)
+            # cv2.waitKey(1)
                 
-        cv2.imshow('Progress', color_map)
-        cv2.waitKey(1)
+        
             
     raise ValueError("Unable to find path") 
         
@@ -117,10 +121,12 @@ def format_path(came_from, node):
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
-    center = (450,450,0)
-    goal = (450,77,0)
-    
+    # goal = (350.0,300.0,0.0)
+    center = (450.0,450.0,0.0)
+    goal = (450.0,77.0,0.0)
+    start = time.time()
     path = hybrid_a_star_path(center,goal,map)
+    print(time.time() - start)
     color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
     for loc in path:
         cv2.circle(color_map,(int(loc[0]),int(loc[1])),3, (255,0,0),-1)

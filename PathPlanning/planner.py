@@ -29,8 +29,8 @@ if __name__ == '__main__':
     color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
     for i in range(len(dx)):
         cv2.circle(color_map,(int(dx[i]),int(dy[i])),3,(0,255,0),-1)
-    for i in range(len(upath)):
-        cv2.circle(color_map,(upath[i][1],upath[i][0]),3,(0,0,255),-1)
+    # for i in range(len(upath)):
+    #     cv2.circle(color_map,(upath[i][1],upath[i][0]),3,(0,0,255),-1)
     cv2.imshow('map+path',color_map)
     print(cost)
     # cv2.imwrite('heuristic.jpg',color_map)

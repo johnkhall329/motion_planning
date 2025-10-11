@@ -15,7 +15,7 @@ class Unconstrained():
         self.came_from[self.goal] = None
         self.cost_so_far[self.goal] = 0
         self.map = map.astype(np.float32)
-        # self.color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+        self.color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
         self.frontier.put((0,self.goal))
     
     def get_unconstrained_path(self, start_state, step_size=10):
