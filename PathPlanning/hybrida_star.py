@@ -12,7 +12,7 @@ except ModuleNotFoundError:
 D_HEADING = np.pi/12
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
-TURN_COST = 5
+TURN_COST = 3
 
 # a node is a continous (x,y,phi) tuple
 # phi is the heading angle in radians 
@@ -31,8 +31,8 @@ def discritize(node, resolution=10, turning_a=D_HEADING):
     and 7 increments of 15 degrees
 
     """
-    x = node[0]//resolution
-    y = node[1]//resolution
+    x = int(node[0]/resolution)
+    y = int(node[1]/resolution)
     phi = node[2]
     phi = phi - 2*np.pi if phi > np.pi else phi
     phi = phi + 2*np.pi if phi < -np.pi else phi
@@ -79,6 +79,9 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
     frontier.put((0,start_loc))
     goal_discretized = discritize(goal_loc)
     twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),map)
+    color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+    cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
+    cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     while not frontier.empty():
         item = frontier.get()
         curr_node = item[1]
@@ -98,19 +101,29 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node
+                cv2.circle(color_map,(int(curr_node[0]),int(curr_node[1])),3, (255,0,0),-1)
+                
+        cv2.imshow('Progress', color_map)
+        cv2.waitKey(1)
             
     raise ValueError("Unable to find path") 
         
 def format_path(came_from, node):
     path = []
-    while came_from[node] is not None: # appends nodes in path with goal as beginning
+    while came_from[discritize(node)] is not None: # appends nodes in path with goal as beginning
         path.append(node)
-        node = came_from[node]
+        node = came_from[discritize(node)]
     return path
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
-    center = (350,300,0)
+    center = (450,450,0)
     goal = (450,77,0)
     
     path = hybrid_a_star_path(center,goal,map)
+    color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+    for loc in path:
+        cv2.circle(color_map,(int(loc[0]),int(loc[1])),3, (255,0,0),-1)
+    cv2.imshow('Progress', color_map)
+    while True:
+        cv2.waitKey(1)
