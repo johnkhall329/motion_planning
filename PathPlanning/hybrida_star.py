@@ -15,11 +15,13 @@ RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
 TURN_COST = 10
 
+SHOW_ARROWS = True
+
 # a node is a continous (x,y,phi) tuple
 # phi is the heading angle in radians 
 # x and y are in pixels, with (0,0) as top left corner
 
-def discritize(node, resolution=10, turning_a=D_HEADING):
+def discritize(node, resolution=RESOLUTION, turning_a=D_HEADING):
     """
     Sorts a node into a grid based on resolution and turning angle
     resolution: size of each grid square
@@ -37,7 +39,7 @@ def discritize(node, resolution=10, turning_a=D_HEADING):
     phi = node[2]
     phi = phi - 2*np.pi if phi > np.pi else phi
     phi = phi + 2*np.pi if phi < -np.pi else phi
-    phi = int(phi/turning_a)
+    phi = round(phi/turning_a)
     return (x,y,phi)
 
 def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
@@ -121,15 +123,34 @@ def format_path(came_from, node):
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
-    # goal = (350.0,300.0,0.0)
-    center = (450.0,450.0,0.0)
+    center = (350.0,300.0,0.0)
+    start = (450.0,450.0,0.0)
     goal = (450.0,77.0,0.0)
-    start = time.time()
-    path = hybrid_a_star_path(center,goal,map)
-    print(time.time() - start)
-    color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+    t = time.time()
+    path = hybrid_a_star_path(start,center,map)
+
+    print("Time taken:", time.time() - t)
+    
+    # Length of arrow (pixels)
+    ARROW_LENGTH = 5
+
+    color_map = cv2.cvtColor(map, cv2.COLOR_GRAY2BGR)
     for loc in path:
-        cv2.circle(color_map,(int(loc[0]),int(loc[1])),3, (255,0,0),-1)
+        x, y, phi = loc
+        center = (int(x), int(y))
+
+        # Draw the center point
+        cv2.circle(color_map, center, 3, (255, 0, 0), -1)
+
+        if SHOW_ARROWS:
+            # Compute arrow direction (positive heading = CCW)
+            dx = -ARROW_LENGTH * math.sin(phi)
+            dy = -ARROW_LENGTH * math.cos(phi)
+            tip = (int(x + dx), int(y + dy))
+
+            # Draw heading arrow
+            cv2.arrowedLine(color_map, center, tip, (0, 0, 255), 2, tipLength=0.4)
+    
     cv2.imshow('Progress', color_map)
     while True:
         cv2.waitKey(1)
