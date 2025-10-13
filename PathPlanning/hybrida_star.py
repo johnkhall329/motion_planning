@@ -13,7 +13,7 @@ except ModuleNotFoundError:
 D_HEADING = np.pi/12
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
-TURN_COST = 10
+TURN_COST = 15
 
 SHOW_ARROWS = True
 
@@ -21,7 +21,7 @@ SHOW_ARROWS = True
 # phi is the heading angle in radians 
 # x and y are in pixels, with (0,0) as top left corner
 
-def discritize(node, resolution=RESOLUTION, turning_a=D_HEADING):
+def discretize(node, resolution=RESOLUTION, turning_a=D_HEADING):
     """
     Sorts a node into a grid based on resolution and turning angle
     resolution: size of each grid square
@@ -34,8 +34,8 @@ def discritize(node, resolution=RESOLUTION, turning_a=D_HEADING):
     and 7 increments of 15 degrees
 
     """
-    x = int(node[0]/resolution)
-    y = int(node[1]/resolution)
+    x = round(node[0]/resolution)
+    y = round(node[1]/resolution)
     phi = node[2]
     phi = phi - 2*np.pi if phi > np.pi else phi
     phi = phi + 2*np.pi if phi < -np.pi else phi
@@ -53,6 +53,7 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     # consts for turning
     r = distance/turning_a
     d = 2 * r * math.sin(turning_a/2)
+    # d = 10 # for debugging
 
     # left
     dx = d * -math.sin(phi + turning_a/2)
@@ -77,10 +78,10 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
     frontier = PriorityQueue()
     came_from = {}
     cost_so_far = {}
-    came_from[discritize(start_loc)] = None
-    cost_so_far[discritize(start_loc)] = 0
+    came_from[discretize(start_loc)] = None
+    cost_so_far[discretize(start_loc)] = 0
     frontier.put((0,start_loc))
-    goal_discretized = discritize(goal_loc)
+    goal_discretized = discretize(goal_loc)
     twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),map)
     # color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
@@ -88,14 +89,14 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
     while not frontier.empty():
         item = frontier.get()
         curr_node = item[1]
-        curr_discritized = discritize(curr_node)
+        curr_discritized = discretize(curr_node)
 
         if curr_discritized == goal_discretized: #will need to do correct goal checking
             return format_path(came_from,curr_node)
         
         for i,next_node in enumerate(find_neighbors(curr_node)):
             new_cost = cost_so_far[curr_discritized] + TURN_COST + RESOLUTION if i%2 == 0 else cost_so_far[curr_discritized] + RESOLUTION # additional costs of moving + turning n shi
-            next_discritized = discritize(next_node)
+            next_discritized = discretize(next_node)
             prev_cost = cost_so_far.get(next_discritized)       
             
             if prev_cost is None or new_cost < prev_cost:    
@@ -116,9 +117,9 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
         
 def format_path(came_from, node):
     path = []
-    while came_from[discritize(node)] is not None: # appends nodes in path with goal as beginning
+    while came_from[discretize(node)] is not None: # appends nodes in path with goal as beginning
         path.append(node)
-        node = came_from[discritize(node)]
+        node = came_from[discretize(node)]
     return path
 
 if __name__ == '__main__':
@@ -127,9 +128,26 @@ if __name__ == '__main__':
     start = (450.0,450.0,0.0)
     goal = (450.0,77.0,0.0)
     t = time.time()
-    path = hybrid_a_star_path(start,center,map)
+
+    phase1 = hybrid_a_star_path(start,center,map)
+    phase2 = hybrid_a_star_path(center,goal,map)
+    path = phase1 + phase2
+
+    # path = hybrid_a_star_path(start,goal,map)
 
     print("Time taken:", time.time() - t)
+
+    # for i, node in enumerate(path):
+    #     if i == 0:
+    #         continue
+    #     # print distance between nodes
+    #     prev = path[i-1]
+    #     dist = math.sqrt((node[0]-prev[0])**2 + (node[1]-prev[1])**2)
+    #     print(f"discretized: {discretize(node)}, actual: {node}")
+    #     # print(f"Distance from: {dist:.2f}")
+    #     if dist > 10.01:
+    #         print("prev node:", prev)
+    #         print("curr node:", node)
     
     # Length of arrow (pixels)
     ARROW_LENGTH = 5
