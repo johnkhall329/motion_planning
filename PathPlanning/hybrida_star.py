@@ -69,10 +69,10 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     return (left, straight, right)
 
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
-    dx,dy, _, _, path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)
+    path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)[4]
     h1 = sum(path)
-    u_path,h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
-    return max(h1,h2), dx,dy
+    _,h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
+    return max(h1,h2)
 
 def hybrid_a_star_path(start_loc, goal_loc, map):
     frontier = PriorityQueue()
@@ -101,7 +101,7 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
             
             if prev_cost is None or new_cost < prev_cost:    
                 cost_so_far[next_discritized] = new_cost
-                heuristic,dubinsx,dubinsy = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)  
+                heuristic = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)  
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node

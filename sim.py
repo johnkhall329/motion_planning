@@ -128,11 +128,11 @@ def get_bin_road(screen, scale, ego:Car):
     cv2.imwrite('path.jpg',blurred)
     road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
 
-    center = (int(ego.y)//scale, int(ego.x)//scale)
-    size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
-    box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
-    box_points = box_points.astype(np.int32)
-    cv2.drawContours(road, [box_points], 0, RED, -1) # Actually blue because BGR
+    # center = (int(ego.y)//scale, int(ego.x)//scale)
+    # size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
+    # box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
+    # box_points = box_points.astype(np.int32)
+    # cv2.drawContours(road, [box_points], 0, RED, -1) # Actually blue because BGR
     return road
     
 
