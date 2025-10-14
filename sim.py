@@ -2,7 +2,6 @@ import pygame
 import math
 import sys
 import random
-from planner import get_motion_step
 import cv2
 import numpy as np
 
@@ -17,6 +16,7 @@ ROAD_WIDTH_M = 7.0 # meters
 CAR_WIDTH = 40
 CAR_LENGTH = 60
 CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
+TURNING_RADIUS = 30.0 #Will need to recalculate based on maximum turning angle
 LANE_LINE_WIDTH = 5
 LANE_DASH_LENGTH = 40
 LANE_GAP = 20
@@ -31,6 +31,9 @@ YELLOW = (255, 255, 0)
 
 PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
 METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
+
+from Kinematics.states import State
+from PathPlanning.planner import get_motion_step
 
 def ppt_to_mph(ppt: float, dt) -> float:
     '''
@@ -113,7 +116,7 @@ def get_bin_road(screen, scale, ego:Car):
     
     cars_resize = cv2.resize(cars, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
     lines_resize = cv2.resize(lines, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
-    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (12,12))
+    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
     erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     cars_dilute = cv2.dilate(cars_resize,dilute_kernel,iterations=5)
     lines_dilute = cv2.dilate(lines_resize ,dilute_kernel,iterations=2)
@@ -122,13 +125,14 @@ def get_bin_road(screen, scale, ego:Car):
     # eroded = cv2.erode(combined,erode_kernel)
     # dilated = cv2.dilate(eroded,dilute_kernel,iterations=3)
     blurred = cv2.GaussianBlur(combined, (45,45),0)
+    cv2.imwrite('path.jpg',blurred)
     road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
 
-    center = (int(ego.y)//scale, int(ego.x)//scale)
-    size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
-    box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
-    box_points = box_points.astype(np.int32)
-    cv2.drawContours(road, [box_points], 0, RED, -1)
+    # center = (int(ego.y)//scale, int(ego.x)//scale)
+    # size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
+    # box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
+    # box_points = box_points.astype(np.int32)
+    # cv2.drawContours(road, [box_points], 0, RED, -1) # Actually blue because BGR
     return road
     
 
@@ -207,7 +211,7 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
-        road_bin = get_bin_road(screen, 2, ego_car)
+        road_bin = get_bin_road(screen, 1, ego_car)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
