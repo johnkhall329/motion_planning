@@ -8,18 +8,18 @@ import numpy as np
 # -----------------------
 # Simulation Parameters
 # -----------------------
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-FPS = 60
-ROAD_WIDTH = 200
-ROAD_WIDTH_M = 7.0 # meters
-CAR_WIDTH = 40
-CAR_LENGTH = 60
-CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
-TURNING_RADIUS = 30.0 #Will need to recalculate based on maximum turning angle
-LANE_LINE_WIDTH = 5
-LANE_DASH_LENGTH = 40
-LANE_GAP = 20
+# SCREEN_WIDTH = 800
+# SCREEN_HEIGHT = 600
+# FPS = 60
+# ROAD_WIDTH = 200
+# ROAD_WIDTH_M = 7.0 # meters
+# CAR_WIDTH = 40
+# CAR_LENGTH = 60
+# CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
+# TURNING_RADIUS = 30.0 #Will need to recalculate based on maximum turning angle
+# LANE_LINE_WIDTH = 5
+# LANE_DASH_LENGTH = 40
+# LANE_GAP = 20
 
 # Colors
 WHITE = (255, 255, 255)
@@ -29,10 +29,10 @@ BLUE = (0, 0, 255)
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 
-PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
-METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
+# PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
+# METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
 
-from Kinematics.states import State
+from Kinematics.parameters import *
 from PathPlanning.planner import get_motion_step
 
 def ppt_to_mph(ppt: float, dt) -> float:
@@ -109,31 +109,7 @@ def draw_lane_lines(screen, offset_y, offset_x):
         pygame.Rect(center_x + ROAD_WIDTH // 2 - LANE_LINE_WIDTH,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
     )
 
-def get_bin_road(screen, scale, ego:Car):
-    road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
-    cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
-    lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
-    
-    cars_resize = cv2.resize(cars, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
-    lines_resize = cv2.resize(lines, (SCREEN_WIDTH//scale,SCREEN_HEIGHT//scale))
-    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
-    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
-    cars_dilute = cv2.dilate(cars_resize,dilute_kernel,iterations=5)
-    lines_dilute = cv2.dilate(lines_resize ,dilute_kernel,iterations=2)
-    combined = cv2.bitwise_or(cars_dilute, lines_dilute)
-    
-    # eroded = cv2.erode(combined,erode_kernel)
-    # dilated = cv2.dilate(eroded,dilute_kernel,iterations=3)
-    blurred = cv2.GaussianBlur(combined, (45,45),0)
-    cv2.imwrite('path.jpg',blurred)
-    road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
 
-    # center = (int(ego.y)//scale, int(ego.x)//scale)
-    # size = (CAR_WIDTH//scale, CAR_LENGTH//scale)
-    # box_points = cv2.boxPoints(cv2.RotatedRect(center,size, math.degrees(-ego.heading)))
-    # box_points = box_points.astype(np.int32)
-    # cv2.drawContours(road, [box_points], 0, RED, -1) # Actually blue because BGR
-    return road
     
 
 
@@ -211,12 +187,12 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
-        road_bin = get_bin_road(screen, 1, ego_car)
+        print(ego_car.heading)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
 
-        cv2.imshow('binary road', road_bin)
+        # cv2.imshow('binary road', road_bin)
 
         # HUD
         font = pygame.font.SysFont(None, 20)
@@ -224,6 +200,7 @@ def main():
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
+        pygame.image.save(screen, "screen.jpg")
         cv2.waitKey(1)
 
     pygame.quit()

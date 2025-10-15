@@ -3,19 +3,43 @@ from queue import PriorityQueue
 import math 
 import cv2
 import time
+import pygame
 try:
+    from Kinematics.parameters import *
     from PathPlanning.unconstrained import Unconstrained
     from PathPlanning.dubins import plan_dubins_path as dubins
+    
 except ModuleNotFoundError:
     from unconstrained import Unconstrained
     from dubins import plan_dubins_path as dubins
+    SCREEN_WIDTH = 800
+    SCREEN_HEIGHT = 600
+    CAR_WIDTH = 40
+    CAR_LENGTH = 60
+    CAR_WHEELBASE = 40
 
 D_HEADING = np.pi/12
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
-TURN_COST = 15
-
+TURN_COST = 10
 SHOW_ARROWS = True
+
+def get_bin_road(road_img):
+    # road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
+    cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
+    lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
+    
+    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
+    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    cars_dilute = cv2.dilate(cars,dilute_kernel,iterations=5)
+    lines_dilute = cv2.dilate(lines ,dilute_kernel,iterations=2)
+    combined = cv2.bitwise_or(cars_dilute, lines_dilute)
+    
+    # eroded = cv2.erode(combined,erode_kernel)
+    # dilated = cv2.dilate(eroded,dilute_kernel,iterations=3)
+    blurred = cv2.GaussianBlur(combined, (45,45),0)
+    # diluted_road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
+    return cars, blurred
 
 # a node is a continous (x,y,phi) tuple
 # phi is the heading angle in radians 
@@ -74,7 +98,21 @@ def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained
     _,h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
     return max(h1,h2)
 
-def hybrid_a_star_path(start_loc, goal_loc, map):
+def check_collision(objects, came_from, node):
+    path_img = np.zeros_like(objects)
+    path = []
+    while came_from[discretize(node)] is not None:
+        path.append(node)
+        car_loc = cv2.RotatedRect((node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2),(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
+        pts = car_loc.points().astype(np.int32).reshape((-1, 1, 2))
+        cv2.fillConvexPoly(path_img,pts,(255,255,255))
+        node = came_from[discretize(node)]
+        
+    mask = cv2.bitwise_and(objects,path_img)
+    return np.any(mask), path, path_img
+
+def hybrid_a_star_path(start_loc, goal_loc, screen):
+    car_img, diluted_img = get_bin_road(screen)
     frontier = PriorityQueue()
     came_from = {}
     cost_so_far = {}
@@ -82,17 +120,23 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
     cost_so_far[discretize(start_loc)] = 0
     frontier.put((0,start_loc))
     goal_discretized = discretize(goal_loc)
-    twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),map)
-    # color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
+    twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),diluted_img)
+    color_map = cv2.cvtColor(diluted_img,cv2.COLOR_GRAY2BGR)
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
     # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
+    itr = 0
     while not frontier.empty():
         item = frontier.get()
         curr_node = item[1]
         curr_discritized = discretize(curr_node)
+        cm = color_map.copy()
 
         if curr_discritized == goal_discretized: #will need to do correct goal checking
-            return format_path(came_from,curr_node)
+            collided, path, path_img = check_collision(car_img, came_from, curr_node)      
+            if not collided: return path,path_img,diluted_img
+            else:
+                print('collision')
+                continue
         
         for i,next_node in enumerate(find_neighbors(curr_node)):
             new_cost = cost_so_far[curr_discritized] + TURN_COST + RESOLUTION if i%2 == 0 else cost_so_far[curr_discritized] + RESOLUTION # additional costs of moving + turning n shi
@@ -105,14 +149,12 @@ def hybrid_a_star_path(start_loc, goal_loc, map):
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node
-                # for i in range(len(dubinsx)):
-                #     cv2.circle(color_map,(int(dubinsx[i]),int(dubinsy[i])),3, (0,0,255),-1)
-                # cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
-            # cv2.imshow('Progress', color_map)
+            #     for i in range(len(dubinsx)):
+            #         cv2.circle(cm,(int(dubinsx[i]),int(dubinsy[i])),3, (0,0,255),-1)
+            #     cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
+            # cv2.imshow('Progress', cm)
             # cv2.waitKey(1)
-                
-        
-            
+        itr+=1
     raise ValueError("Unable to find path") 
         
 def format_path(came_from, node):
@@ -124,13 +166,17 @@ def format_path(came_from, node):
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
-    center = (350.0,300.0,0.0)
+    screen = cv2.imread('screen.jpg', cv2.IMREAD_COLOR)
+    center = (350.0,240.0,0.0)
     start = (450.0,450.0,0.0)
-    goal = (450.0,77.0,0.0)
+    goal = (450.0,25.0,0.0)
     t = time.time()
 
-    phase1 = hybrid_a_star_path(start,center,map)
-    phase2 = hybrid_a_star_path(center,goal,map)
+    cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
+    phase1,img1, dil = hybrid_a_star_path(start,center,screen)
+    phase2,img2, dil= hybrid_a_star_path(center,goal,screen)
+    cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
+    # cv2.imshow('diluted', dil)
     path = phase1 + phase2
 
     # path = hybrid_a_star_path(start,goal,map)
@@ -152,7 +198,8 @@ if __name__ == '__main__':
     # Length of arrow (pixels)
     ARROW_LENGTH = 5
 
-    color_map = cv2.cvtColor(map, cv2.COLOR_GRAY2BGR)
+    color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
+    # color_map = screen.copy()
     for loc in path:
         x, y, phi = loc
         center = (int(x), int(y))
