@@ -18,7 +18,7 @@ except ModuleNotFoundError:
     CAR_LENGTH = 60
     CAR_WHEELBASE = 40
 
-D_HEADING = np.pi/12
+D_HEADING = np.pi/20
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
 TURN_COST = 10
@@ -30,7 +30,7 @@ def get_bin_road(road_img):
     lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
     
     dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
-    erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+    # erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     cars_dilute = cv2.dilate(cars,dilute_kernel,iterations=5)
     lines_dilute = cv2.dilate(lines ,dilute_kernel,iterations=2)
     combined = cv2.bitwise_or(cars_dilute, lines_dilute)
@@ -109,7 +109,7 @@ def check_collision(objects, came_from, node):
         node = came_from[discretize(node)]
         
     mask = cv2.bitwise_and(objects,path_img)
-    return np.any(mask), path, path_img
+    return np.any(mask), path
 
 def hybrid_a_star_path(start_loc, goal_loc, screen):
     car_img, diluted_img = get_bin_road(screen)
@@ -125,19 +125,31 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
     # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     itr = 0
+    collision_itr = 0
+    min_h = SCREEN_HEIGHT/2
+    collision_check_ratio = 3
     while not frontier.empty():
         item = frontier.get()
         curr_node = item[1]
         curr_discritized = discretize(curr_node)
-        cm = color_map.copy()
+        # cm = color_map.copy()
 
         if curr_discritized == goal_discretized: #will need to do correct goal checking
-            collided, path, path_img = check_collision(car_img, came_from, curr_node)      
-            if not collided: return path,path_img,diluted_img
+            collided, path = check_collision(car_img, came_from, curr_node)      
+            if not collided: 
+                return path
             else:
                 print('collision')
                 continue
         
+        if collision_itr >= min_h/collision_check_ratio:
+            collided, _ = check_collision(car_img, came_from, curr_node)
+            collision_itr = 0
+            if collided: # If there is a collision, set the cost super high. There could be ways to get to the node without a collision
+                cost_so_far[curr_discritized] = 1e9
+                print('found collision')
+                continue
+            
         for i,next_node in enumerate(find_neighbors(curr_node)):
             new_cost = cost_so_far[curr_discritized] + TURN_COST + RESOLUTION if i%2 == 0 else cost_so_far[curr_discritized] + RESOLUTION # additional costs of moving + turning n shi
             next_discritized = discretize(next_node)
@@ -145,7 +157,8 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             
             if prev_cost is None or new_cost < prev_cost:    
                 cost_so_far[next_discritized] = new_cost
-                heuristic = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)  
+                heuristic = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)
+                min_h = min(heuristic, min_h)
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node
@@ -154,6 +167,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             #     cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
             # cv2.imshow('Progress', cm)
             # cv2.waitKey(1)
+        collision_itr += 1
         itr+=1
     raise ValueError("Unable to find path") 
         
@@ -173,11 +187,11 @@ if __name__ == '__main__':
     t = time.time()
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
-    phase1,img1, dil = hybrid_a_star_path(start,center,screen)
-    phase2,img2, dil= hybrid_a_star_path(center,goal,screen)
-    cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
+    phase1 = hybrid_a_star_path(start,goal,screen)
+    # phase2= hybrid_a_star_path(center,goal,screen)
+    # cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
     # cv2.imshow('diluted', dil)
-    path = phase1 + phase2
+    path = phase1 #+ phase2
 
     # path = hybrid_a_star_path(start,goal,map)
 
@@ -198,8 +212,8 @@ if __name__ == '__main__':
     # Length of arrow (pixels)
     ARROW_LENGTH = 5
 
-    color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
-    # color_map = screen.copy()
+    # color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
+    color_map = screen.copy()
     for loc in path:
         x, y, phi = loc
         center = (int(x), int(y))

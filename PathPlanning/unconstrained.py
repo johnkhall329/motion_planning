@@ -55,7 +55,7 @@ class Unconstrained():
                         # cv2.circle(self.color_map,(next_node[1]*step_size,next_node[0]*step_size),3, (0,255,255))
             # cv2.imshow('upath', self.color_map)
             # cv2.waitKey(1)
-        print("Unable to find path")
+        # print("Unable to find path")
         return None, 1e9
 
     def replan_frontier(self,start_state,step_size):
