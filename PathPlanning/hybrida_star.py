@@ -169,7 +169,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             # cv2.waitKey(1)
         collision_itr += 1
         itr+=1
-    raise ValueError("Unable to find path") 
+    raise ValueError("Unable to find path")
         
 def format_path(came_from, node):
     path = []
@@ -181,19 +181,27 @@ def format_path(came_from, node):
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
     screen = cv2.imread('screen.jpg', cv2.IMREAD_COLOR)
-    center = (350.0,240.0,0.0)
     start = (450.0,450.0,0.0)
+    center = (350.0,240.0,0.0)
     goal = (450.0,25.0,0.0)
     t = time.time()
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
-    phase1 = hybrid_a_star_path(start,goal,screen)
-    # phase2= hybrid_a_star_path(center,goal,screen)
+    
+    TWO_PHASES = True
+
+    # In 2 phases:
+    if TWO_PHASES:
+        phase1 = hybrid_a_star_path(start,center,screen)
+        phase2 = hybrid_a_star_path(center,goal,screen)
+        path = phase2 + phase1
+
+    # In 1 phase:
+    else:
+        path = hybrid_a_star_path(start,goal,screen)
+
     # cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
     # cv2.imshow('diluted', dil)
-    path = phase1 #+ phase2
-
-    # path = hybrid_a_star_path(start,goal,map)
 
     print("Time taken:", time.time() - t)
 
@@ -211,6 +219,10 @@ if __name__ == '__main__':
     
     # Length of arrow (pixels)
     ARROW_LENGTH = 5
+
+    filepath = 'hybrid_astar_path.npy'
+    np.save(filepath, np.array(path))
+    print(f"Saved path to {filepath}")
 
     # color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
     color_map = screen.copy()
