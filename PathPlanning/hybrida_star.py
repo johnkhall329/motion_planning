@@ -76,8 +76,8 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
 
     # consts for turning
     r = distance/turning_a
-    d = 2 * r * math.sin(turning_a/2)
-    # d = 10 # for debugging
+    # d = 2 * r * math.sin(turning_a/2)
+    d = RESOLUTION # for debugging
 
     # left
     dx = d * -math.sin(phi + turning_a/2)
@@ -89,8 +89,7 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     dy = d * -math.cos(phi - turning_a/2)
     right = (x+dx,y+dy,phi-turning_a)
 
-
-    return (left, straight, right)
+    return ((left, 10), (straight, 0), (right, 10))
 
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
     path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)[4]
@@ -150,8 +149,9 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
                 print('found collision')
                 continue
             
-        for i,next_node in enumerate(find_neighbors(curr_node)):
-            new_cost = cost_so_far[curr_discritized] + TURN_COST + RESOLUTION if i%2 == 0 else cost_so_far[curr_discritized] + RESOLUTION # additional costs of moving + turning n shi
+        for next_neighbor in find_neighbors(curr_node):
+            next_node, turn_cost = next_neighbor
+            new_cost = cost_so_far[curr_discritized] + turn_cost + RESOLUTION
             next_discritized = discretize(next_node)
             prev_cost = cost_so_far.get(next_discritized)       
             
