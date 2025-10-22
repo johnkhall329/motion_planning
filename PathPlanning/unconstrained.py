@@ -22,16 +22,17 @@ class Unconstrained():
         # cv2.circle(self.color_map,(self.goal[1]*step_size,self.goal[0]*step_size),3, (0,255,0),-1)
         # cv2.circle(self.color_map,(start_state[1]*step_size,start_state[0]*step_size),3, (255,0,0),-1)
         if self.cost_so_far.get(start_state) is not None:
-            return self.format_path(start_state),self.cost_so_far[start_state]
+            return self.cost_so_far[start_state]
         self.replan_frontier(start_state,step_size)
         while not self.frontier.empty():
             item = self.frontier.get()
             curr_node = item[1]
+            if self.map[(curr_node[0]*step_size, curr_node[1]*step_size)] > 250: return 1e9
             # cv2.circle(self.color_map,(curr_node[1]*step_size,curr_node[0]*step_size),3, (0,0,255))
          
             if curr_node == start_state: # if it finds the goal, return a formatted path
                 # return self.cost_so_far[curr_node]
-                return self.format_path(curr_node),self.cost_so_far[curr_node]
+                return self.cost_so_far[curr_node]
             
             for next_node in [(curr_node[0]-1, curr_node[1]),
                               (curr_node[0], curr_node[1]+1),
@@ -56,7 +57,7 @@ class Unconstrained():
             # cv2.imshow('upath', self.color_map)
             # cv2.waitKey(1)
         # print("Unable to find path")
-        return None, 1e9
+        return 1e9
 
     def replan_frontier(self,start_state,step_size):
         new_frontier = PriorityQueue()

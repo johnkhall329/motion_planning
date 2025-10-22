@@ -18,7 +18,7 @@ except ModuleNotFoundError:
     CAR_LENGTH = 60
     CAR_WHEELBASE = 40
 
-D_HEADING = np.pi/20
+D_HEADING = np.pi/12
 RESOLUTION = 10
 TURNING_RADIUS = RESOLUTION/D_HEADING
 TURN_COST = 10
@@ -89,27 +89,31 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     dy = d * -math.cos(phi - turning_a/2)
     right = (x+dx,y+dy,phi-turning_a)
 
-
     return (left, straight, right)
-
+    
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
     path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)[4]
     h1 = sum(path)
-    _,h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
+    h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
     return max(h1,h2)
 
-def check_collision(objects, came_from, node):
+def check_collision(objects, came_from, cost_so_far, node):
     path_img = np.zeros_like(objects)
     path = []
+    collided=False
     while came_from[discretize(node)] is not None:
-        path.append(node)
+        path.append(node)        
         car_loc = cv2.RotatedRect((node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2),(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
         pts = car_loc.points().astype(np.int32).reshape((-1, 1, 2))
         cv2.fillConvexPoly(path_img,pts,(255,255,255))
+        mask = cv2.bitwise_and(objects,path_img)
+        if np.any(mask): 
+            collided=True
+            for collided_node in path:   
+                cost_so_far[discretize(collided_node)] = 1e9
+            break
         node = came_from[discretize(node)]
-        
-    mask = cv2.bitwise_and(objects,path_img)
-    return np.any(mask), path
+    return collided, path
 
 def hybrid_a_star_path(start_loc, goal_loc, screen):
     car_img, diluted_img = get_bin_road(screen)
@@ -125,40 +129,33 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
     # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     itr = 0
-    collision_itr = 0
-    min_h = SCREEN_HEIGHT/2
-    collision_check_ratio = 3
+    collision_prob_const = 10
     while not frontier.empty():
         item = frontier.get()
+        h = item[0]
         curr_node = item[1]
         curr_discritized = discretize(curr_node)
         # cm = color_map.copy()
 
         if curr_discritized == goal_discretized: #will need to do correct goal checking
-            collided, path = check_collision(car_img, came_from, curr_node)      
+            collided, path = check_collision(car_img, came_from, cost_so_far, curr_node)      
             if not collided: 
                 return path
             else:
                 print('collision')
                 continue
         
-        if collision_itr >= min_h/collision_check_ratio:
-            collided, _ = check_collision(car_img, came_from, curr_node)
-            collision_itr = 0
-            if collided: # If there is a collision, set the cost super high. There could be ways to get to the node without a collision
-                cost_so_far[curr_discritized] = 1e9
-                print('found collision')
-                continue
+        if h!=0 and (collision_prob_const/h > np.random.random()):
+            check_collision(car_img, came_from, cost_so_far, curr_node)
             
         for i,next_node in enumerate(find_neighbors(curr_node)):
             new_cost = cost_so_far[curr_discritized] + TURN_COST + RESOLUTION if i%2 == 0 else cost_so_far[curr_discritized] + RESOLUTION # additional costs of moving + turning n shi
             next_discritized = discretize(next_node)
             prev_cost = cost_so_far.get(next_discritized)       
             
-            if prev_cost is None or new_cost < prev_cost:    
+            if prev_cost is None or new_cost < prev_cost:
                 cost_so_far[next_discritized] = new_cost
                 heuristic = get_heuristic(curr_node,curr_discritized, goal_loc,twodastar)
-                min_h = min(heuristic, min_h)
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
                 came_from[next_discritized] = curr_node
@@ -167,7 +164,6 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             #     cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
             # cv2.imshow('Progress', cm)
             # cv2.waitKey(1)
-        collision_itr += 1
         itr+=1
     raise ValueError("Unable to find path") 
         
@@ -187,11 +183,11 @@ if __name__ == '__main__':
     t = time.time()
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
-    phase1 = hybrid_a_star_path(start,goal,screen)
-    # phase2= hybrid_a_star_path(center,goal,screen)
+    phase1 = hybrid_a_star_path(start,center,screen)
+    phase2= hybrid_a_star_path(phase1[0],goal,screen)
     # cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
     # cv2.imshow('diluted', dil)
-    path = phase1 #+ phase2
+    path = phase1 + phase2
 
     # path = hybrid_a_star_path(start,goal,map)
 
@@ -211,8 +207,6 @@ if __name__ == '__main__':
     
     # Length of arrow (pixels)
     ARROW_LENGTH = 5
-
-    # color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
     color_map = screen.copy()
     for loc in path:
         x, y, phi = loc
@@ -229,7 +223,7 @@ if __name__ == '__main__':
 
             # Draw heading arrow
             cv2.arrowedLine(color_map, center, tip, (0, 0, 255), 2, tipLength=0.4)
-    
+        
     cv2.imshow('Progress', color_map)
     while True:
         cv2.waitKey(1)
