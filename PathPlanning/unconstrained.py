@@ -17,6 +17,7 @@ class Unconstrained():
         self.map = map.astype(np.float32)
         self.color_map = cv2.cvtColor(map,cv2.COLOR_GRAY2BGR)
         self.frontier.put((0,self.goal))
+        self.obstacle_scale = 7.5
     
     def get_unconstrained_path(self, start_state, step_size=10):
         # cv2.circle(self.color_map,(self.goal[1]*step_size,self.goal[0]*step_size),3, (0,255,0),-1)
@@ -43,7 +44,7 @@ class Unconstrained():
                               (curr_node[0]-1, curr_node[1]+1),
                               (curr_node[0]-1, curr_node[1]-1)]:
                 if 0<=next_node[0]*step_size<self.map.shape[0] and 0<=next_node[1]*step_size<self.map.shape[1] and self.map[next_node[0]*step_size, next_node[1]*step_size] < 250:
-                    new_cost = self.cost_so_far[curr_node] + self.map[next_node[0]*step_size, next_node[1]*step_size] + step_size*math.sqrt((curr_node[0]-next_node[0])**2 + (curr_node[1]-next_node[1])**2)
+                    new_cost = self.cost_so_far[curr_node] + self.obstacle_scale*self.map[next_node[0]*step_size, next_node[1]*step_size] + step_size*math.sqrt((curr_node[0]-next_node[0])**2 + (curr_node[1]-next_node[1])**2)
                     prev_cost = self.cost_so_far.get(next_node)
                     # if self.map[next_node] > 150:
                     #     print(new_cost)
