@@ -45,6 +45,9 @@ def get_bin_road(road_img):
 # phi is the heading angle in radians 
 # x and y are in pixels, with (0,0) as top left corner
 
+def round_node(node):
+    return (round(node[0]), round(node[1]), round(node[2], 2))
+
 def discretize(node, resolution=RESOLUTION, turning_a=D_HEADING):
     """
     Sorts a node into a grid based on resolution and turning angle
@@ -89,7 +92,7 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     dy = d * -math.cos(phi - turning_a/2)
     right = (x+dx,y+dy,phi-turning_a)
 
-    return ((left, 10), (straight, 0), (right, 10))
+    return ((left, TURN_COST), (straight, 0), (right, TURN_COST))
 
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
     path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)[4]
@@ -100,12 +103,12 @@ def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained
 def check_collision(objects, came_from, node):
     path_img = np.zeros_like(objects)
     path = []
-    while came_from[discretize(node)] is not None:
+    while came_from[round_node(node)] is not None:
         path.append(node)
         car_loc = cv2.RotatedRect((node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2),(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
         pts = car_loc.points().astype(np.int32).reshape((-1, 1, 2))
         cv2.fillConvexPoly(path_img,pts,(255,255,255))
-        node = came_from[discretize(node)]
+        node = came_from[round_node(node)]
         
     mask = cv2.bitwise_and(objects,path_img)
     return np.any(mask), path
@@ -115,7 +118,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     frontier = PriorityQueue()
     came_from = {}
     cost_so_far = {}
-    came_from[discretize(start_loc)] = None
+    came_from[round_node(start_loc)] = None
     cost_so_far[discretize(start_loc)] = 0
     frontier.put((0,start_loc))
     goal_discretized = discretize(goal_loc)
@@ -161,7 +164,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
                 min_h = min(heuristic, min_h)
                 priority = new_cost + heuristic
                 frontier.put((priority,next_node))
-                came_from[next_discritized] = curr_node
+                came_from[round_node(next_node)] = curr_node
             #     for i in range(len(dubinsx)):
             #         cv2.circle(cm,(int(dubinsx[i]),int(dubinsy[i])),3, (0,0,255),-1)
             #     cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
@@ -173,9 +176,9 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
         
 def format_path(came_from, node):
     path = []
-    while came_from[discretize(node)] is not None: # appends nodes in path with goal as beginning
+    while came_from[round_node(node)] is not None: # appends nodes in path with goal as beginning
         path.append(node)
-        node = came_from[discretize(node)]
+        node = came_from[round_node(node)]
     return path
 
 if __name__ == '__main__':
@@ -188,7 +191,7 @@ if __name__ == '__main__':
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
     
-    TWO_PHASES = True
+    TWO_PHASES = False
 
     # In 2 phases:
     if TWO_PHASES:
