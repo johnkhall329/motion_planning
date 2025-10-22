@@ -246,14 +246,14 @@ if __name__ == "__main__":
     filepath = 'hybrid_astar_path.npy'
     hybrid_path = np.load(filepath)
 
-    for loc in hybrid_path:
-        x, y, phi = loc
-        print(f"x: {x:.2f} pix, y: {y:.2f} pix, heading: {phi*180/np.pi:.1f} deg")
+    # for loc in hybrid_path:
+    #     x, y, phi = loc
+    #     print(f"x: {x:.2f} pix, y: {y:.2f} pix, heading: {phi*180/np.pi:.1f} deg")
 
     resampled = smooth_and_resample(hybrid_path, spacing_m=0.3)
     
-    for loc in resampled:
-        x, y, phi = loc
-        print(f"x: {x:.2f} m, y: {y:.2f} m, heading: {phi*180/np.pi:.1f} deg")
+    # for loc in resampled:
+    #     x, y, phi = loc
+    #     print(f"x: {x:.2f} m, y: {y:.2f} m, heading: {phi*180/np.pi:.1f} deg")
     
     quick_visual_check(hybrid_path, resampled)
