@@ -51,5 +51,4 @@ qtcreator-*
 
 # Catkin custom files
 CATKIN_IGNORE
-screen.jpg
 hybrid_astar_path.npy
