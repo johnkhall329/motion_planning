@@ -1,6 +1,6 @@
 import numpy as np
 from queue import PriorityQueue
-import math 
+import math
 import cv2
 import time
 import pygame
@@ -111,7 +111,7 @@ def check_collision(objects, came_from, node):
         node = came_from[round_node(node)]
         
     mask = cv2.bitwise_and(objects,path_img)
-    return np.any(mask), path
+    return np.any(mask), format_path(path, round_node(node))
 
 def hybrid_a_star_path(start_loc, goal_loc, screen):
     car_img, diluted_img = get_bin_road(screen)
@@ -174,12 +174,9 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
         itr+=1
     raise ValueError("Unable to find path")
         
-def format_path(came_from, node):
-    path = []
-    while came_from[round_node(node)] is not None: # appends nodes in path with goal as beginning
-        path.append(node)
-        node = came_from[round_node(node)]
-    return path
+def format_path(path, start):
+    path.append(start)
+    return path[::-1]
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
@@ -191,13 +188,13 @@ if __name__ == '__main__':
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
     
-    TWO_PHASES = False
+    TWO_PHASES = True
 
     # In 2 phases:
     if TWO_PHASES:
         phase1 = hybrid_a_star_path(start,center,screen)
-        phase2 = hybrid_a_star_path(center,goal,screen)
-        path = phase2 + phase1
+        phase2 = hybrid_a_star_path(phase1[-1],goal,screen)
+        path = phase1 + phase2
 
     # In 1 phase:
     else:
