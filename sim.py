@@ -200,7 +200,7 @@ def main():
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
-        pygame.image.save(screen, "screen.jpg")
+        # pygame.image.save(screen, "screen.jpg")
         cv2.waitKey(1)
 
     pygame.quit()
