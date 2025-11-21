@@ -4,6 +4,7 @@ import math
 import cv2
 import time
 import pygame
+from scipy.spatial import KDTree
 try:
     from Kinematics.parameters import *
     from PathPlanning.unconstrained import Unconstrained
@@ -19,7 +20,7 @@ except ModuleNotFoundError:
     CAR_WHEELBASE = 40
 
 D_HEADING = np.pi/12
-RESOLUTION = 10
+RESOLUTION = 20
 TURNING_RADIUS = RESOLUTION/D_HEADING
 TURN_COST = 10
 SHOW_ARROWS = True
@@ -79,8 +80,8 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
 
     # consts for turning
     r = distance/turning_a
-    # d = 2 * r * math.sin(turning_a/2)
-    d = RESOLUTION # for debugging
+    d = 2 * r * math.sin(turning_a/2)
+    # d = RESOLUTION # for debugging
 
     # left
     dx = d * -math.sin(phi + turning_a/2)
@@ -99,6 +100,23 @@ def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained
     h1 = sum(path)
     h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
     return max(h1,h2)
+
+def build_obst_tree(img):
+    obstacles_pxs = np.where(img>1)
+    obst_tree = KDTree(np.vstack([obstacles_pxs[1], obstacles_pxs[0]]).T)
+    return obst_tree
+
+def kd_collision_check(object_tree, node):
+    collision_r = math.ceil(np.hypot(CAR_LENGTH/2, CAR_WIDTH/2))
+    car_loc = (node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2)
+    collided_idxs = object_tree.query_ball_point(car_loc, collision_r)
+    if len(collided_idxs) > 0:
+        car_rect = cv2.RotatedRect(car_loc,(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
+        for obst in object_tree.data[collided_idxs]:
+            if cv2.pointPolygonTest(car_rect.points(), (obst[0], obst[1]), False) >= 0: 
+                print("found kd collision")
+                return True
+    return False
 
 def check_collision(objects, came_from, cost_so_far, node):
     path_img = np.zeros_like(objects)
@@ -120,6 +138,7 @@ def check_collision(objects, came_from, cost_so_far, node):
 
 def hybrid_a_star_path(start_loc, goal_loc, screen):
     car_img, diluted_img = get_bin_road(screen)
+    obst_tree = build_obst_tree(car_img)
     frontier = PriorityQueue()
     came_from = {}
     cost_so_far = {}
@@ -128,7 +147,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     frontier.put((0,start_loc))
     goal_discretized = discretize(goal_loc)
     twodastar = Unconstrained((goal_discretized[1],goal_discretized[0]),diluted_img)
-    color_map = cv2.cvtColor(diluted_img,cv2.COLOR_GRAY2BGR)
+    # color_map = cv2.cvtColor(diluted_img,cv2.COLOR_GRAY2BGR)
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
     # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     itr = 0
@@ -148,9 +167,15 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
                 print('collision')
                 continue
         
+        if kd_collision_check(obst_tree, curr_node):
+            continue
+        
         if h!=0 and (collision_prob_const/h > np.random.random()):
-            check_collision(car_img, came_from, cost_so_far, curr_node)
-            
+            kd_collision_check(obst_tree, curr_node)
+            collided,_ = check_collision(car_img, came_from, cost_so_far, curr_node)
+            if collided: continue
+        
+        # cv2.circle(color_map,(int(curr_node[0]),int(curr_node[1])),3, (0,0,255),-1)    
         for next_neighbor in find_neighbors(curr_node):
             next_node, turn_cost = next_neighbor
             new_cost = cost_so_far[curr_discritized] + turn_cost + RESOLUTION
@@ -166,7 +191,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             #     for i in range(len(dubinsx)):
             #         cv2.circle(cm,(int(dubinsx[i]),int(dubinsy[i])),3, (0,0,255),-1)
             #     cv2.circle(color_map,(int(next_node[0]),int(next_node[1])),3, (0,0,255),-1)
-            # cv2.imshow('Progress', cm)
+            # cv2.imshow('Progress', color_map)
             # cv2.waitKey(1)
         itr+=1
     raise ValueError("Unable to find path")
