@@ -59,11 +59,13 @@ class Car:
         self.color = color
 
     def update(self, U, dt=1.0):
+        dt = .02
         # U = [steering angle (theta), acceleration (a)]
         theta, a = U
         v_dot = a  # acceleration
         self.speed += v_dot * dt
         phi_dot = self.speed * math.tan(theta) / CAR_LENGTH  # simple bicycle model
+        # print(math.degrees(self.heading))
         self.heading += phi_dot * dt
         self.x_dot = self.speed * -math.sin(self.heading)
         self.y_dot = self.speed * math.cos(self.heading)
@@ -158,16 +160,16 @@ def main():
         other_car.x_dot = other_car.speed * -math.sin(other_car.heading)
         other_car.y_dot = other_car.speed * math.cos(other_car.heading)
 
-        # --- Manual controls (optional override) ---
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP]:
-            ego_car.speed += 0.1
-        if keys[pygame.K_DOWN]:
-            ego_car.speed = max(0.0, ego_car.speed - 0.1)
-        if keys[pygame.K_LEFT]:
-            ego_car.heading += math.radians(0.5)
-        if keys[pygame.K_RIGHT]:
-            ego_car.heading -= math.radians(0.5)
+        # # --- Manual controls (optional override) ---
+        # keys = pygame.key.get_pressed()
+        # if keys[pygame.K_UP]:
+        #     ego_car.speed += 0.1
+        # if keys[pygame.K_DOWN]:
+        #     ego_car.speed = max(0.0, ego_car.speed - 0.1)
+        # if keys[pygame.K_LEFT]:
+        #     ego_car.heading += math.radians(0.5)
+        # if keys[pygame.K_RIGHT]:
+        #     ego_car.heading -= math.radians(0.5)
 
         # --- Road scrolls with ego motion ---
         lane_offset_y += ego_car.y_dot
@@ -187,7 +189,7 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
-        print(ego_car.heading)
+        # print(ego_car.heading)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)

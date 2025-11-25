@@ -10,12 +10,63 @@ import numpy as np
 # from sim import TURNING_RADIUS
 TURNING_RADIUS = 100
 
-def get_motion_step():
-    # Placeholder function to simulate getting motion step from planner
-    # In a real scenario, this would interface with the planner module
-    theta = 0.0  # No steering angle change
-    a = 0.0      # No acceleration change
-    return (theta, a)
+# ----------------------
+# Global trajectory control buffer
+# ----------------------
+U_buffer = None
+t_buffer = None
+U_index = 0
+
+def load_controls_from_csv(csv_file='traj.csv'):
+    """
+    Load trajectory CSV and compute U(t) using control.py
+    """
+    import PathPlanning.control as control # make sure control.py is in path
+    global U_buffer, t_buffer, U_index
+
+    traj = control.load_traj_from_csv(csv_file)
+    U_buffer = control.trajectory_to_controls(traj)  # (N,2)
+    t_buffer = traj[:, 0]  # timestamps
+    U_index = 0
+    print(f"Loaded {len(U_buffer)} control steps from {csv_file}")
+
+
+def get_motion_step(dt_sim=0.02):
+    """
+    Return [theta, a] for the current simulation step.
+
+    Uses interpolation if dt_sim != dt_traj.
+    """
+    global U_buffer, t_buffer, U_index
+
+    if U_buffer is None or t_buffer is None:
+        load_controls_from_csv()
+        # raise RuntimeError("Controls not loaded. Call load_controls_from_csv() first.")
+
+    # current simulation time
+    t_sim = U_index * dt_sim
+
+    # if we exceeded trajectory time, hold last control
+    if t_sim >= t_buffer[-1]:
+        print("done")
+        return [0, 0]
+
+    # find surrounding indices for interpolation
+    idx_next = np.searchsorted(t_buffer, t_sim, side='right')
+    idx_prev = max(0, idx_next - 1)
+
+    t0, t1 = t_buffer[idx_prev], t_buffer[idx_next]
+    U0, U1 = U_buffer[idx_prev], U_buffer[idx_next]
+
+    # linear interpolation
+    if t1 - t0 < 1e-6:
+        U_interp = U0
+    else:
+        alpha = (t_sim - t0) / (t1 - t0)
+        U_interp = (1 - alpha) * U0 + alpha * U1
+
+    U_index += 1
+    return U_interp.tolist()
 
 
 if __name__ == '__main__':

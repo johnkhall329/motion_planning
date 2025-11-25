@@ -128,7 +128,7 @@ def smooth_and_resample(path_px: np.ndarray,
     if smoothing and SCIPY_AVAILABLE and len(x) >= 4:
         s = cumulative_arc_length(x, y)
         # parametric spline for x(s), y(s)
-        smoothing_factor = 0.001
+        smoothing_factor = 0.01
         cs_x = UnivariateSpline(s, x, s=smoothing_factor)
         cs_y = UnivariateSpline(s, y, s=smoothing_factor)
 
@@ -586,11 +586,11 @@ if __name__ == "__main__":
         hybrid_path = np.load(filepath)
         resampled = smooth_and_resample(hybrid_path, spacing_m=0.1)
         traj, times = parameterize_path_trapezoid(resampled,
-                                                  v0=0.5,
-                                                  vf=0.5,
-                                                  v_max=2.0,
-                                                  a_max=1.0,
-                                                  d_max=1.0,
+                                                  v0=4,
+                                                  vf=4,
+                                                  v_max=8.0,
+                                                  a_max=2.0,
+                                                  d_max=2.0,
                                                   dt=0.02)
         quick_visual_check(hybrid_path, resampled, traj)
     except FileNotFoundError:
@@ -600,8 +600,9 @@ if __name__ == "__main__":
     # print("len resampled: ", len(resampled))
     # print("len traj: ", len(traj))
 
+    import math
     # for item in traj:
-    #     print(item)
+    #     print(math.degrees(item[3]))
 
     # animate_trajectory(traj)
     save_traj_to_csv(traj)
