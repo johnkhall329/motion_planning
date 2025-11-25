@@ -17,6 +17,8 @@ Functions:
 from typing import Tuple, Optional
 import numpy as np
 import time
+import os
+import pandas as pd
 
 try:
     from Kinematics.parameters import *
@@ -524,6 +526,55 @@ def animate_trajectory(traj: np.ndarray):
     plt.ioff()
     plt.show()
 
+import os
+import numpy as np
+import pandas as pd
+
+def save_traj_to_csv(
+        traj: np.ndarray,
+        filename: str = 'traj.csv',
+    ) -> str:
+    """
+    Save a trajectory ndarray to CSV using pandas.
+
+    Parameters:
+      traj: (N,6) or (N,M) ndarray. Expected standard columns:
+        [t, x_ref, y_ref, heading_ref, s_ref, v_ref]
+      filename: output file path (will create parent directories)
+
+    Returns:
+      The path to the saved file.
+    """
+    if traj is None:
+        raise ValueError("traj is None")
+
+    arr = np.asarray(traj)
+    if arr.ndim != 2:
+        raise ValueError("traj must be a 2D ndarray")
+
+    # Ensure directory exists
+    outdir = os.path.dirname(os.path.abspath(filename))
+    if outdir and not os.path.exists(outdir):
+        os.makedirs(outdir, exist_ok=True)
+
+    # Build header according to number of columns
+    ncols = arr.shape[1]
+    if ncols >= 6:
+        cols = ['t', 'x_ref', 'y_ref', 'heading_ref', 's_ref', 'v_ref'] + \
+               [f'c{i}' for i in range(6, ncols)]
+    else:
+        cols = [f'c{i}' for i in range(ncols)]
+
+    df = pd.DataFrame(arr, columns=cols)
+
+    # Save with pandas
+    df.to_csv(filename, index=False, float_format='%.3f')
+    print(f"Trajectory saved to {filename}.")
+
+    return filename
+
+
+
 if __name__ == "__main__":
     # quick inline smoke test - expects hybrid_astar_path.npy to exist if you want to run full demo
     # run the trapezoid unit test
@@ -552,4 +603,5 @@ if __name__ == "__main__":
     # for item in traj:
     #     print(item)
 
-    animate_trajectory(traj)
+    # animate_trajectory(traj)
+    save_traj_to_csv(traj)
