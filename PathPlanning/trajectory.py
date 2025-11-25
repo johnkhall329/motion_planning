@@ -16,6 +16,7 @@ Functions:
 
 from typing import Tuple, Optional
 import numpy as np
+import time
 
 try:
     from Kinematics.parameters import *
@@ -481,6 +482,47 @@ def _test_trapezoid():
     assert abs(s_traj[-1] - s_total) < 1e-3
     assert abs(v_traj[-1] - vf) < 1e-3
 
+def animate_trajectory(traj: np.ndarray):
+    """
+    Animate the trajectory point by point in real time.
+    traj: (N,6) array [t, x, y, heading, s, v]
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        print("matplotlib not available; skipping animation.")
+        return
+
+    if traj is None or len(traj) < 2:
+        print("Trajectory too short to animate.")
+        return
+
+    x = traj[:, 1]
+    y = traj[:, 2]
+    t = traj[:, 0]
+
+    plt.ion()
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.set_title("Trajectory Animation")
+    ax.set_xlabel("x (m)")
+    ax.set_ylabel("y (m)")
+    ax.axis('equal')
+
+    # Plot full path faintly
+    ax.plot(x, y, '--', color='gray', alpha=0.3)
+
+    point, = ax.plot([], [], 'ro', markersize=6)  # moving point
+
+    for i in range(len(x)):
+        point.set_data([x[i]], [y[i]])
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        if i < len(t) - 1:
+            dt = t[i + 1] - t[i]
+            plt.pause(dt)  # pause for the time difference
+
+    plt.ioff()
+    plt.show()
 
 if __name__ == "__main__":
     # quick inline smoke test - expects hybrid_astar_path.npy to exist if you want to run full demo
@@ -503,5 +545,11 @@ if __name__ == "__main__":
     except FileNotFoundError:
         print("No example hybrid_astar_path.npy found; skip pipeline demo.")
 
-    for item in traj:
-        print(item)
+    # print("len original: ", len(hybrid_path))
+    # print("len resampled: ", len(resampled))
+    # print("len traj: ", len(traj))
+
+    # for item in traj:
+    #     print(item)
+
+    animate_trajectory(traj)
