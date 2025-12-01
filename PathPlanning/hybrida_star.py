@@ -151,10 +151,9 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     # cv2.circle(color_map,(int(goal_loc[0]),int(goal_loc[1])),3, (0,255,0),-1)
     # cv2.circle(color_map,(int(start_loc[0]),int(start_loc[1])),3, (255,0,0),-1)
     itr = 0
-    collision_prob_const = 10
     while not frontier.empty():
         item = frontier.get()
-        h = item[0]
+        # h = item[0]
         curr_node = item[1]
         curr_discritized = discretize(curr_node)
         # cm = color_map.copy()
@@ -170,10 +169,20 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
         if kd_collision_check(obst_tree, curr_node):
             continue
         
-        if h!=0 and (collision_prob_const/h > np.random.random()):
-            kd_collision_check(obst_tree, curr_node)
-            collided,_ = check_collision(car_img, came_from, cost_so_far, curr_node)
-            if collided: continue
+        # curr_dist = item[0] - cost_so_far[curr_discritized]
+        # prob = curr_dist/init_dist
+        # if item[0]!=0 and (prob < np.random.random()):
+        #     dx,dy,dphi,_,_ = dubins(curr_node[0], curr_node[1], curr_node[2]-np.pi/2, goal_loc[0], goal_loc[1], goal_loc[2]-np.pi/2, 1/TURNING_RADIUS)
+        #     for dubins_node in zip(dx,dy,dphi):
+        #         if kd_collision_check(obst_tree, dubins_node):break
+                
+        #     dubins_path = [(x,y,phi) for x,y,phi in zip(dx,dy,dphi)]
+        #     path = format_path(came_from, curr_node)
+        #     path = path+dubins_path
+        #     return path
+                
+        #     collided,_ = check_collision(car_img, came_from, cost_so_far, curr_node)
+        #     if collided: continue
         
         # cv2.circle(color_map,(int(curr_node[0]),int(curr_node[1])),3, (0,0,255),-1)    
         for next_neighbor in find_neighbors(curr_node):
