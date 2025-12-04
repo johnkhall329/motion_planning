@@ -46,7 +46,19 @@ def control_input(state: State, U, dt=0.1):
     phi = state.phi + phi_dot * dt
     x = state.x + v * -math.sin(phi) * dt
     y = state.y + v * math.cos(phi) * dt
-    return State(x, y, v, phi)
+    new_state = State(x, y, v, phi)
+    
+    # Append to control.csv
+    csv_filename = "control.csv"
+    file_exists = os.path.exists(csv_filename)
+    with open(csv_filename, 'a') as f:
+        if not file_exists:
+            # Write header if file is new
+            f.write("x,y,v,phi\n")
+        # Append the new state
+        f.write(f"{new_state.x:.6f},{new_state.y:.6f},{new_state.v:.6f},{new_state.phi:.6f}\n")
+    
+    return new_state
 
 
 def trajectory_to_controls(traj: np.ndarray, car_length: float = CAR_LENGTH, plot: bool = False):

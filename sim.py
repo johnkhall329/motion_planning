@@ -4,6 +4,7 @@ import sys
 import random
 import cv2
 import numpy as np
+import os
 
 # -----------------------
 # Simulation Parameters
@@ -73,6 +74,17 @@ class Car:
         # self.y += self.y_dot * dt
         # print(f"x: {self.x}, heading: {math.degrees(self.heading):.2f}, speed: {self.speed:.2f}")
         # print(f"x_dot: {self.x_dot:.2f}, y_dot: {self.y_dot:.2f}")
+        
+        # Append to real.csv
+        csv_filename = "real.csv"
+        file_exists = os.path.exists(csv_filename)
+        with open(csv_filename, 'a') as f:
+            if not file_exists:
+                # Write header if file is new
+                f.write("x,y,speed,heading\n")
+            # Append the current state
+            f.write(f"{self.x:.6f},{self.y:.6f},{self.speed:.6f},{self.heading:.6f}\n")
+        
         return [self.x_dot * dt, self.y_dot * dt, phi_dot * dt]
 
     def draw(self, screen):
@@ -142,6 +154,8 @@ def main():
     while running:
         dt = clock.tick(FPS) / 1000.0  # seconds per frame
         screen.fill(GRAY)
+        # TODO: COME BACK HERE
+        # print(dt)
 
         # --- Events ---
         for event in pygame.event.get():

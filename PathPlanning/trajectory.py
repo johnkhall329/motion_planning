@@ -582,15 +582,16 @@ if __name__ == "__main__":
 
     # If a hybrid path file exists, demonstrate the pipeline
     try:
+        #TODO: Figure out how to make trajectory naturally start at 0.0 heading
         filepath = 'hybrid_astar_path.npy'
         hybrid_path = np.load(filepath)
         resampled = smooth_and_resample(hybrid_path, spacing_m=0.1)
         traj, times = parameterize_path_trapezoid(resampled,
-                                                  v0=4,
-                                                  vf=4,
+                                                  v0=5,
+                                                  vf=5,
                                                   v_max=8.0,
-                                                  a_max=2.0,
-                                                  d_max=2.0,
+                                                  a_max=3.0,
+                                                  d_max=3.0,
                                                   dt=0.02)
         quick_visual_check(hybrid_path, resampled, traj)
     except FileNotFoundError:
