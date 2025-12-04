@@ -108,7 +108,7 @@ def p_dubins_connect(start, goal, r, step_size, img=None):
     
     n_x_rand = np.linalg.inv(transform)@np.hstack([goal,1])
 
-    if (n_x_rand[1]**2 + (abs(n_x_rand[0]) - r)**2) >= r**2:
+    if (n_x_rand[1]**2 + (abs(n_x_rand[0]) - r)**2) >= r**2 and n_x_rand[1] < 0:
         if n_x_rand[0] >= 0: #RS
             # print("RS")
             c = np.array([r,0])
@@ -125,7 +125,7 @@ def p_dubins_connect(start, goal, r, step_size, img=None):
         best_theta = theta[i]
         path, length = interpolate_path_straight(c,r,n_x_rand, best_theta, transform, step_size)
         
-    else:
+    elif n_x_rand[1] < 0:
         if n_x_rand[0] >= 0: #LR
             # print("LR")
             c = np.array([-r,0])
@@ -140,16 +140,18 @@ def p_dubins_connect(start, goal, r, step_size, img=None):
         c2 = n_x_rand[:2] + np.array([r*math.cos(psi+alpha),r*math.sin(psi+alpha)])
         theta1 = math.atan2(c2[1]-c[1],c2[0]-c[0])
         path, length = interpolate_path_circle(c,c2,r,n_x_rand, theta1, theta2, transform, step_size)
+    else:
+        path, length = None, None
     
-    if img is not None:
+    if img is not None and path is not None:
         for p in path:
             cv2.circle(img, p[:2].astype(np.int32), 1, (0,0,255))
                 
         cv2.circle(img, (round(start[0]), round(start[1])), 1, (0,255,0), -1)
         cv2.circle(img, (round(goal[0]), round(goal[1])), 1, (255,255,255), 1)
         
-        cv2.imshow('progress', img)
-        cv2.waitKey(1)
+        cv2.imshow('paths', img)
+        cv2.waitKey(10)
     return path, length
 
 if __name__ == '__main__':

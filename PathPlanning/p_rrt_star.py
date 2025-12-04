@@ -10,7 +10,7 @@ CAR_WIDTH = 40
 CAR_LENGTH = 60
 CAR_WHEELBASE = 40
 
-D_HEADING = np.pi/6
+D_HEADING = np.pi/4
 RESOLUTION = 20
 TURNING_RADIUS = RESOLUTION/D_HEADING
 TURN_COST = 10
@@ -21,10 +21,12 @@ from dubins import plan_dubins_path
 
 def get_bin_road(road_img):
     cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
+    dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
+    cars_dilute = cv2.dilate(cars,dilute_kernel,iterations=2)
     lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
     outside = cv2.inRange(road_img, np.array([25,25,25]), np.array([75,75,75]))
     
-    obstacles_pxs = np.where(cv2.bitwise_or(lines, cars)>1)
+    obstacles_pxs = np.where(cv2.bitwise_or(lines, cars_dilute)>1)
     obst_tree = KDTree(np.vstack([obstacles_pxs[1], obstacles_pxs[0]]).T)
     
     inv_lines = cv2.bitwise_not(cv2.bitwise_or(lines, outside), 255*np.ones_like(lines))
@@ -95,26 +97,27 @@ class P_RRTStar():
         for v_idx in self.unadded_Vs:
             v = self.V[v_idx]
             D = np.hypot(p[0]-v[0],p[1]-v[1])
-            if D<dist:
+            if D<dist and v[1]>p[1]:
                 dist = D
                 nearest_v = v
                 nearest_idx = v_idx
         return nearest_v, nearest_idx
     
     def near(self, p):
-        new_r = np.hypot(self.goal[0]-self.start[0], self.goal[1]-self.start[1])/(self.r*self.V_count)
-        near_r = max(new_r, self.r)
+        # new_r = np.hypot(self.goal[0]-self.start[0], self.goal[1]-self.start[1])/(self.r*self.V_count)
+        # near_r = max(new_r, 2*self.r)
+        near_r = 3*self.step_size
         idxs = self.kd_tree.query_ball_point(p,near_r)
         dists = {}
         for idx in idxs:
             if idx >= self.V.shape[0]: continue
             v = self.V[idx]
             dist = np.hypot(p[0]-v[0],p[1]-v[1])
-            dists[idx] = dist
+            if v[1]>p[1]: dists[idx] = dist
         for idx in self.unadded_Vs:
             v = self.V[idx]
             dist = np.hypot(p[0]-v[0],p[1]-v[1])
-            if dist <= near_r: dists[idx] = dist
+            if dist <= near_r and v[1]>p[1]: dists[idx] = dist
         dist = {k: v for k, v in sorted(dists.items(), key=lambda item: item[1])}
         return list(dist.keys())
     
@@ -145,15 +148,16 @@ class P_RRTStar():
                 if not parent_collided:
                     self.cost_so_far[v_near_idx] = cost+self.cost_so_far[v_new_idx]
                     self.came_from[v_near_idx] = (v_new_idx, d_path)
-                    print('rewired')
+                    # print('rewired')
                 
     def reconstruct_path(self, goal_idx):
         path = [self.V[goal_idx]]
         total_path = []
         node_idx, d_path = self.came_from[goal_idx]
-        total_path += d_path
+        # total_path += d_path
         while node_idx is not None:
             path.insert(0, self.V[node_idx])
+            print(d_path[1][2]-path[0][2],d_path[-1][2]-path[1][2])
             total_path = d_path + total_path
             node_idx, d_path = self.came_from[node_idx]
         return path, total_path
@@ -167,44 +171,47 @@ class P_RRTStar():
             #     for node in path:
             #         if kd_collision_check(self.obst_tree, self.collision_r, node): break
             p_new = self.steer(v_nearest, p_rand)
-            path, cost = p_dubins_connect(v_nearest, p_new, self.r, 1, self.img.copy())
+            path, cost = p_dubins_connect(v_nearest, p_new, self.r, 1)
+            if path is None: continue
             collided = False
             for node in path:
                 if kd_collision_check(self.obst_tree, self.collision_r, node): 
                     collided = True
                     break
-            if not collided:
+            # if not collided:
             # if all([not kd_collision_check(self.obst_tree, self.collision_r, node) for node in path]):
-                total_cost = self.cost_so_far[v_nearest_idx] + cost
-                v_parent_idx = v_nearest_idx
-                v_new = path[-1]
-                best_path = path
-                nearby = self.near(p_new)
-                for v_near_idx in nearby:
-                    if v_near_idx == v_nearest_idx: continue
-                    path, cost = p_dubins_connect(v_nearest, p_new, self.r, 1)
-                    if self.cost_so_far[v_near_idx] + cost < total_cost:
-                        parent_collided = False
-                        for node in path:
-                            if kd_collision_check(self.obst_tree, self.collision_r, node): 
-                                parent_collided = True
-                                break
-                        if not parent_collided:
-                        # if all([not kd_collision_check(self.obst_tree, self.collision_r, node) for node in path]):
-                            total_cost = self.cost_so_far[v_near_idx] + cost
-                            v_parent_idx = v_near_idx
-                            v_new = path[-1]
-                            best_path = path
-                v_new_idx = self.V_count
-                self.add_vertex(v_new)
-                self.cost_so_far[v_new_idx] = total_cost
-                self.came_from[v_new_idx] = (v_parent_idx, best_path)
-                self.rewire(v_new, v_new_idx, nearby)
-                cv2.circle(self.img, (round(v_new[0]), round(v_new[1])), 2, (0,0,255), -1)
-                if round(v_new[0]) == round(self.goal[0]) and round(v_new[1]) == round(self.goal[1]):
-                    return self.reconstruct_path(v_new_idx)
-            cv2.imshow('progress', self.img)
-            cv2.waitKey(1)
+            total_cost = self.cost_so_far[v_nearest_idx] + cost
+            v_parent_idx = v_nearest_idx if not collided else None
+            best_path = path if not collided else None
+            nearby = self.near(p_new)
+            for v_near_idx in nearby:
+                if v_near_idx == v_nearest_idx: continue
+                v_near = self.V[v_near_idx]
+                path, cost = p_dubins_connect(v_near, p_new, self.r, 1)
+                if path is None: continue
+                if self.cost_so_far[v_near_idx] + cost < total_cost:
+                    parent_collided = False
+                    for node in path:
+                        if kd_collision_check(self.obst_tree, self.collision_r, node): 
+                            parent_collided = True
+                            break
+                    if not parent_collided:
+                    # if all([not kd_collision_check(self.obst_tree, self.collision_r, node) for node in path]):
+                        total_cost = self.cost_so_far[v_near_idx] + cost
+                        v_parent_idx = v_near_idx
+                        best_path = path
+            if v_parent_idx is None: continue
+            v_new = best_path[-1]
+            v_new_idx = self.V_count
+            self.add_vertex(v_new)
+            self.cost_so_far[v_new_idx] = total_cost
+            self.came_from[v_new_idx] = (v_parent_idx, best_path)
+            self.rewire(v_new, v_new_idx, nearby)
+            # cv2.circle(self.img, (round(v_new[0]), round(v_new[1])), 2, (0,0,255), -1)
+            if round(v_new[0]) == round(self.goal[0]) and round(v_new[1]) == round(self.goal[1]):
+                return self.reconstruct_path(v_new_idx)
+            # cv2.imshow('progress', self.img)
+            # cv2.waitKey(1)
             # print(self.sample_count)    
         raise TimeoutError("Unable to find path")
 
@@ -213,15 +220,18 @@ if __name__ == '__main__':
     start = np.array([450.,450.,0.])
     goal = np.array([450., 25.])
     start_t = time.time()
-    rrt = P_RRTStar(img.copy(), start, goal, TURNING_RADIUS, 1.5*RESOLUTION, 5e3)
+    rrt = P_RRTStar(img.copy(), start, goal, TURNING_RADIUS, RESOLUTION, 1e5)
     path, d_path = rrt.p_rrt_star()
     print(time.time()-start_t)
     for p in d_path:
         cv2.circle(img, p[:2].astype(np.int32), 1, (0,0,255), -1)
     
     for p in path:
-        print(p[2])
+        # print(p[2])
         cv2.circle(img, p[:2].astype(np.int32), 2, (255,255,255), -1)
+        l=10
+        n_p= np.array([p[0]+l*np.cos(-np.pi/2-p[2]),p[1]+l*np.sin(-np.pi/2-p[2])])
+        cv2.arrowedLine(img,n_p.astype(np.int32), p[:2].astype(np.int32),(0,255,0),2)
                 
     # cv2.circle(img, start[:2].astype(np.int32), 1, (0,0,0), -1)
     cv2.circle(img, goal[:2].astype(np.int32), 1, (0,255,0), 1)
