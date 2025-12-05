@@ -157,7 +157,6 @@ class P_RRTStar():
         # total_path += d_path
         while node_idx is not None:
             path.insert(0, self.V[node_idx])
-            print(d_path[1][2]-path[0][2],d_path[-1][2]-path[1][2])
             total_path = d_path + total_path
             node_idx, d_path = self.came_from[node_idx]
         return path, total_path
@@ -202,6 +201,9 @@ class P_RRTStar():
                         best_path = path
             if v_parent_idx is None: continue
             v_new = best_path[-1]
+            parent_v = self.V[v_parent_idx]
+            if np.allclose(parent_v, v_new, atol=1e-2):
+                print('huh')
             v_new_idx = self.V_count
             self.add_vertex(v_new)
             self.cost_so_far[v_new_idx] = total_cost
@@ -218,23 +220,34 @@ class P_RRTStar():
 if __name__ == '__main__':
     img = cv2.imread('screen2.jpg', cv2.IMREAD_COLOR)
     start = np.array([450.,450.,0.])
-    goal = np.array([450., 25.])
+    center = np.array([350., 200.])
+    goal = np.array([450., 15.])
     start_t = time.time()
-    rrt = P_RRTStar(img.copy(), start, goal, TURNING_RADIUS, RESOLUTION, 1e5)
-    path, d_path = rrt.p_rrt_star()
-    print(time.time()-start_t)
+    rrt = P_RRTStar(img.copy(), start, center, TURNING_RADIUS, RESOLUTION, 1e5)
+    path1, d_path1 = rrt.p_rrt_star()
+    print(f'Path 1: {time.time()-start_t}')
+    start_t2 = time.time()
+    rrt = P_RRTStar(img.copy(), [path1[-1][0], path1[-1][1], 0], goal, TURNING_RADIUS, RESOLUTION, 1e5)
+    path2, d_path2 = rrt.p_rrt_star()
+    print(f'Path 2: {time.time()-start_t2}')
+    print(f'Total Time: {time.time() - start_t}')
+    
+    d_path = d_path1+d_path2
     for p in d_path:
         cv2.circle(img, p[:2].astype(np.int32), 1, (0,0,255), -1)
     
-    for p in path:
+    path = path1+path2
+    for i in range(1,len(path)):
+        prev_p = path[i-1]
+        p = path[i]
         # print(p[2])
+        test_path, _ = p_dubins_connect(prev_p, p[:2], TURNING_RADIUS, 1)
         cv2.circle(img, p[:2].astype(np.int32), 2, (255,255,255), -1)
-        l=10
-        n_p= np.array([p[0]+l*np.cos(-np.pi/2-p[2]),p[1]+l*np.sin(-np.pi/2-p[2])])
-        cv2.arrowedLine(img,n_p.astype(np.int32), p[:2].astype(np.int32),(0,255,0),2)
+        cv2.imshow('img', img)
+        cv2.waitKey(1)
                 
-    # cv2.circle(img, start[:2].astype(np.int32), 1, (0,0,0), -1)
-    cv2.circle(img, goal[:2].astype(np.int32), 1, (0,255,0), 1)
+    cv2.circle(img, start[:2].astype(np.int32), 3, (0,0,0), -1)
+    cv2.circle(img, goal[:2].astype(np.int32), 3, (0,255,0), 1)
     
     cv2.namedWindow('img', cv2.WINDOW_NORMAL)
     cv2.imshow('img', img)

@@ -35,7 +35,7 @@ def interpolate_path_straight(c, r, x_rand, theta, transform, step_size):
     for t in thetas:
         c_point = c+np.array([r*np.cos(t), r*np.sin(t)])
         c_point = transform@np.hstack([c_point,1])
-        v = np.cross([0,0,np.sign(c[0])],[r*np.cos(t),r*np.sin(t),0])
+        v = transform@np.cross([0,0,np.sign(c[0])],[r*np.cos(t),r*np.sin(t),0])
         corrected_heading = -np.pi/2 - math.atan2(v[1], v[0])
         if corrected_heading > np.pi: corrected_heading -= 2*np.pi
         if corrected_heading < -np.pi: corrected_heading += 2*np.pi
@@ -43,8 +43,9 @@ def interpolate_path_straight(c, r, x_rand, theta, transform, step_size):
         path.append(c_point)
     final_point = c+np.array([r*np.cos(thetas[-1]), r*np.sin(thetas[-1])])
     D = np.hypot(x_rand[0]-final_point[0], x_rand[1]-final_point[1])
+    v = transform@[x_rand[0]-final_point[0], x_rand[1]-final_point[1], 0]
     line_ang = np.atan2(x_rand[1]-final_point[1], x_rand[0]-final_point[0])
-    corrected_heading = -np.pi/2 - line_ang
+    corrected_heading = -np.pi/2 - math.atan2(v[1], v[0])
     if corrected_heading > np.pi: corrected_heading -= 2*np.pi
     if corrected_heading < -np.pi: corrected_heading += 2*np.pi
     n_points = math.ceil(D/step_size) + 1
@@ -71,7 +72,7 @@ def interpolate_path_circle(c, c2, r, x_rand, theta1, theta2, transform, step_si
     for t in thetas:
         c_point = c+np.array([r*np.cos(t), r*np.sin(t)])
         c_point = transform@np.hstack([c_point,1])
-        v = np.cross([0,0,np.sign(c[0])],[r*np.cos(t),r*np.sin(t),0])
+        v = transform@np.cross([0,0,np.sign(c[0])],[r*np.cos(t),r*np.sin(t),0])
         corrected_heading = -np.pi/2 - math.atan2(v[1], v[0])
         if corrected_heading > np.pi: corrected_heading -= 2*np.pi
         if corrected_heading < -np.pi: corrected_heading += 2*np.pi
@@ -93,7 +94,7 @@ def interpolate_path_circle(c, c2, r, x_rand, theta1, theta2, transform, step_si
     for t in thetas:
         c_point = c2+np.array([r*np.cos(t), r*np.sin(t)])
         c_point = transform@np.hstack([c_point,1])
-        v = np.cross([0,0,np.sign(c2[0])],[r*np.cos(t),r*np.sin(t),0])
+        v = transform@np.cross([0,0,np.sign(c2[0])],[r*np.cos(t),r*np.sin(t),0])
         corrected_heading = -np.pi/2 - math.atan2(v[1], v[0])
         if corrected_heading > np.pi: corrected_heading -= 2*np.pi
         if corrected_heading < -np.pi: corrected_heading += 2*np.pi
@@ -102,8 +103,8 @@ def interpolate_path_circle(c, c2, r, x_rand, theta1, theta2, transform, step_si
     return path, arc_dist+arc_dist2
 
 def p_dubins_connect(start, goal, r, step_size, img=None):
-    transform = np.array([[np.cos(start[2]),np.sin(start[2]),start[0]],
-                          [-np.sin(start[2]),np.cos(start[2]),start[1]],
+    transform = np.array([[np.cos(-start[2]),-np.sin(-start[2]),start[0]],
+                          [np.sin(-start[2]),np.cos(-start[2]),start[1]],
                           [0,0,1]])
     
     n_x_rand = np.linalg.inv(transform)@np.hstack([goal,1])
@@ -156,8 +157,8 @@ def p_dubins_connect(start, goal, r, step_size, img=None):
 
 if __name__ == '__main__':
     img = np.zeros((100,100,3),dtype=np.uint8)
-    x_init = np.array([15,25,0])
+    x_init = np.array([15,25,-3*np.pi/4])
     r = 5
-    x_rand = np.array([30,23,1])
-    path, length = p_dubins_connect(x_init, x_rand, r, img)
+    x_rand = np.array([30,23])
+    path, length = p_dubins_connect(x_init, x_rand, r, 1, img)
     print(length)
