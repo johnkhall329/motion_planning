@@ -3,21 +3,15 @@ import numpy as np
 import math
 from scipy.spatial import KDTree
 import time
+import os
+import sys
 
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
-CAR_WIDTH = 40
-CAR_LENGTH = 60
-CAR_WHEELBASE = 40
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
 
-D_HEADING = np.pi/12
-RESOLUTION = 20
-TURNING_RADIUS = RESOLUTION/D_HEADING
-TURN_COST = 10
-SHOW_ARROWS = True
-
-from p_dubins import p_dubins_connect
-from dubins import plan_dubins_path
+from parameters import *
+from PathPlanning.p_dubins import p_dubins_connect
+from PathPlanning.dubins import plan_dubins_path
 
 def get_bin_road(road_img):
     """
@@ -284,13 +278,17 @@ if __name__ == '__main__':
     start = np.array([450.,450.,0.])
     center = np.array([350., 200.])
     goal = np.array([450., 15.])
+    tr = RESOLUTION/(D_HEADING*2)
+    
+    show_path = False
+    
     start_t = time.time()
-    rrt = P_RRTStar(img.copy(), start, center, TURNING_RADIUS, RESOLUTION, 1e5)
-    path1, d_path1 = rrt.p_rrt_star(True)
+    rrt = P_RRTStar(img.copy(), start, center, tr, RESOLUTION, 1e5)
+    path1, d_path1 = rrt.p_rrt_star(show_path)
     print(f'Path 1: {time.time()-start_t}')
     start_t2 = time.time()
-    rrt = P_RRTStar(img.copy(), [path1[-1][0], path1[-1][1], 0], goal, TURNING_RADIUS, RESOLUTION, 1e5)
-    path2, d_path2 = rrt.p_rrt_star(True)
+    rrt = P_RRTStar(img.copy(), [path1[-1][0], path1[-1][1], 0], goal, tr, RESOLUTION, 1e5)
+    path2, d_path2 = rrt.p_rrt_star(show_path)
     print(f'Path 2: {time.time()-start_t2}')
     print(f'Total Time: {time.time() - start_t}')
     
@@ -302,7 +300,7 @@ if __name__ == '__main__':
     for i in range(1,len(path)):
         prev_p = path[i-1]
         p = path[i]
-        test_path, _ = p_dubins_connect(prev_p, p[:2], TURNING_RADIUS, 1)
+        test_path, _ = p_dubins_connect(prev_p, p[:2], tr, 1)
         cv2.circle(img, p[:2].astype(np.int32), 2, (255,255,255), -1)
         cv2.imshow('img', img)
         cv2.waitKey(1)

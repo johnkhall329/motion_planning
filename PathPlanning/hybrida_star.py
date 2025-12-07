@@ -3,25 +3,17 @@ from queue import PriorityQueue
 import math
 import cv2
 import time
-import pygame
+import sys
+import os
 from scipy.spatial import KDTree
-try:
-    from Kinematics.parameters import *
-    from PathPlanning.unconstrained import Unconstrained
-    from PathPlanning.dubins import plan_dubins_path as dubins
-    
-except ModuleNotFoundError:
-    from unconstrained import Unconstrained
-    from dubins import plan_dubins_path as dubins
-    SCREEN_WIDTH = 800
-    SCREEN_HEIGHT = 600
-    CAR_WIDTH = 40
-    CAR_LENGTH = 60
-    CAR_WHEELBASE = 40
 
-D_HEADING = np.pi/12
-RESOLUTION = 20
-TURNING_RADIUS = RESOLUTION/D_HEADING
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+from parameters import *
+from PathPlanning.unconstrained import Unconstrained
+from PathPlanning.dubins import plan_dubins_path as dubins
+
 TURN_COST = 10
 SHOW_ARROWS = True
 

@@ -14,7 +14,7 @@ Functions:
 from typing import Tuple, List, Optional
 import numpy as np
 try:
-    from Kinematics.parameters import *
+    from parameters import *
 except ModuleNotFoundError:
     METERS_PER_PIXEL = 0.035
 

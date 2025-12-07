@@ -32,7 +32,7 @@ YELLOW = (255, 255, 0)
 # PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
 # METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
 
-from Kinematics.parameters import *
+from parameters import *
 from PathPlanning.planner import get_motion_step
 
 def ppt_to_mph(ppt: float, dt) -> float:
@@ -187,7 +187,7 @@ def main():
 
         # --- Draw traffic car ---
         other_car.draw(screen)
-        print(ego_car.heading)
+        # print(ego_car.heading)
 
         # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
