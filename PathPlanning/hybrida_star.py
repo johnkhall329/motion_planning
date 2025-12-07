@@ -26,20 +26,21 @@ TURN_COST = 10
 SHOW_ARROWS = True
 
 def get_bin_road(road_img):
+    """
+    Take image of road and generate car obstacles and diluted+blurred car obstacles for unconstrained
+    
+    :param road_img: Image of current road to convert into obstacles
+    """
     # road_img = cv2.cvtColor(cv2.transpose(pygame.surfarray.array3d(screen)), cv2.COLOR_RGB2BGR)
     cars = cv2.inRange(road_img, np.array([0,0,200]), np.array([50,50,255]))
     lines = cv2.inRange(road_img, np.array([200,200,200]), np.array([255,255,255]))
     
     dilute_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25,25))
-    # erode_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
     cars_dilute = cv2.dilate(cars,dilute_kernel,iterations=5)
     lines_dilute = cv2.dilate(lines ,dilute_kernel,iterations=2)
     combined = cv2.bitwise_or(cars_dilute, lines_dilute)
-    
-    # eroded = cv2.erode(combined,erode_kernel)
-    # dilated = cv2.dilate(eroded,dilute_kernel,iterations=3)
+
     blurred = cv2.GaussianBlur(combined, (45,45),0)
-    # diluted_road = cv2.cvtColor(blurred, cv2.COLOR_GRAY2BGR)
     return cars, blurred
 
 # a node is a continous (x,y,phi) tuple
@@ -47,6 +48,12 @@ def get_bin_road(road_img):
 # x and y are in pixels, with (0,0) as top left corner
 
 def round_node(node):
+    """
+    Take node with floating point error and round to nearest pixel, heading to 2 decimals.
+    Used to store nodes in dictionary.
+    
+    :param node: Node to round
+    """
     return (round(node[0]), round(node[1]), round(node[2], 2))
 
 def discretize(node, resolution=RESOLUTION, turning_a=D_HEADING):
@@ -71,6 +78,13 @@ def discretize(node, resolution=RESOLUTION, turning_a=D_HEADING):
     return (x,y,phi)
 
 def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
+    """
+    For a node, generate motion primitives to find three other nodes: left, straight, right. There are additional costs for turning.
+    
+    :param node: Node to find neighbors from
+    :param distance: Arc distance away from current node
+    :param turning_a: Change in heading during turn
+    """
     x,y,phi = node
 
     # straight
@@ -96,17 +110,38 @@ def find_neighbors(node, distance=RESOLUTION, turning_a=D_HEADING):
     return ((left, TURN_COST), (straight, 0), (right, TURN_COST))
 
 def get_heuristic(curr_state, curr_discritized, goal, two_d_astar: Unconstrained, step_size=RESOLUTION):
+    """
+    Return max heuristic between path distance of constrained without obstacles (dubins) and unconstrained with obstacles (2D A*).
+    
+    :param curr_state: Current node to generate path from
+    :param curr_discritized: Discretized node location, used for speeding up 2D A*
+    :param goal: Goal location to arrive at
+    :param two_d_astar: 2D A* search object used for unconstrained search. Goal location is stored as start, use current location as goal and stores history for speed.
+    :param step_size: Distance between discretized nodes
+    """
     path = dubins(curr_state[0], curr_state[1], curr_state[2]-np.pi/2, goal[0], goal[1], goal[2]-np.pi/2, 1/TURNING_RADIUS)[4]
     h1 = sum(path)
     h2 = two_d_astar.get_unconstrained_path((curr_discritized[1], curr_discritized[0]),step_size)
     return max(h1,h2)
 
 def build_obst_tree(img):
+    """
+    Generate KD tree containing car obstacle pixels for collision checking
+    
+    :param img: Binary image of car obstacles
+    """
     obstacles_pxs = np.where(img>1)
     obst_tree = KDTree(np.vstack([obstacles_pxs[1], obstacles_pxs[0]]).T)
     return obst_tree
 
 def kd_collision_check(object_tree, node):
+    """
+    Check for collisions between a current node position and any obstacles.
+    Returns True if there is a collision.
+    
+    :param object_tree: KD tree of obstacles
+    :param node: Pose to check if in collision
+    """
     collision_r = math.ceil(np.hypot(CAR_LENGTH/2, CAR_WIDTH/2))
     car_loc = (node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2)
     collided_idxs = object_tree.query_ball_point(car_loc, collision_r)
@@ -114,29 +149,48 @@ def kd_collision_check(object_tree, node):
         car_rect = cv2.RotatedRect(car_loc,(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
         for obst in object_tree.data[collided_idxs]:
             if cv2.pointPolygonTest(car_rect.points(), (obst[0], obst[1]), False) >= 0: 
-                print("found kd collision")
                 return True
     return False
 
-def check_collision(objects, came_from, cost_so_far, node):
-    path_img = np.zeros_like(objects)
-    path = []
-    collided=False
-    while came_from[round_node(node)] is not None:
-        path.append(node)
-        car_loc = cv2.RotatedRect((node[0]+(math.cos(-np.pi/2-node[2])*CAR_WHEELBASE/2), node[1]+(math.sin(-np.pi/2-node[2]))*CAR_WHEELBASE/2),(CAR_LENGTH,CAR_WIDTH),np.rad2deg(np.pi/2-node[2]))
-        pts = car_loc.points().astype(np.int32).reshape((-1, 1, 2))
-        cv2.fillConvexPoly(path_img,pts,(255,255,255))
-        mask = cv2.bitwise_and(objects,path_img)
-        if np.any(mask): 
-            collided=True
-            for collided_node in path:   
-                cost_so_far[discretize(collided_node)] = 1e9
+def check_path_collision(objects, node, came_from, cost_so_far):
+    """
+    Check for collisions between current node and parent. If there is a collision, it will increase the cost to reach the desired node
+    
+    :param objects: Car obstacle kd tree
+    :param node: Current position
+    :param came_from: Came from dictionary to get parent node
+    :param cost_so_far: Cost map incase of collision
+    """
+    parent_node  = came_from[round_node(node)]
+    collided = False
+    dx, dy, dheading, _, _ = dubins(parent_node[0], parent_node[1], -parent_node[2]-np.pi/2, node[0], node[1], -node[2]-np.pi/2, 1/TURNING_RADIUS+1e-3) # Get points along dubins path, slightly increase curvature to prevent full circle
+    for path_node in zip(dx, dy, dheading+np.pi/2):
+        if kd_collision_check(objects, path_node): 
+            collided = True
             break
+    if collided: cost_so_far[discretize(node)] = 1e9
+    
+def format_path(node, came_from):
+    """
+    Return path from current node to start. Final path starts at starting location and ends at current node
+    
+    :param node: Current node, most likely the goal
+    :param came_from: Dictionary of parent nodes
+    """
+    path = []
+    while came_from[round_node(node)] is not None:
+        path.insert(0,node)
         node = came_from[round_node(node)]
-    return collided, path
+    return path
 
 def hybrid_a_star_path(start_loc, goal_loc, screen):
+    """
+    Generate path from starting location to goal given the current image of the road.
+    
+    :param start_loc: Starting location of ego car
+    :param goal_loc: Goal location for ego car
+    :param screen: Image of road containing non-ego cars
+    """
     car_img, diluted_img = get_bin_road(screen)
     obst_tree = build_obst_tree(car_img)
     frontier = PriorityQueue()
@@ -153,41 +207,22 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     itr = 0
     while not frontier.empty():
         item = frontier.get()
-        # h = item[0]
+        h = item[0]
         curr_node = item[1]
         curr_discritized = discretize(curr_node)
         # cm = color_map.copy()
 
-        if curr_discritized == goal_discretized: #will need to do correct goal checking
-            collided, path = check_collision(car_img, came_from, cost_so_far, curr_node)      
-            if not collided: 
-                return path
-            else:
-                print('collision')
-                continue
-        
-        if kd_collision_check(obst_tree, curr_node):
+        if h != 0 and check_path_collision(obst_tree, curr_node, came_from, cost_so_far): # check for collisions between parent node and current node
             continue
-        
-        # curr_dist = item[0] - cost_so_far[curr_discritized]
-        # prob = curr_dist/init_dist
-        # if item[0]!=0 and (prob < np.random.random()):
-        #     dx,dy,dphi,_,_ = dubins(curr_node[0], curr_node[1], curr_node[2]-np.pi/2, goal_loc[0], goal_loc[1], goal_loc[2]-np.pi/2, 1/TURNING_RADIUS)
-        #     for dubins_node in zip(dx,dy,dphi):
-        #         if kd_collision_check(obst_tree, dubins_node):break
-                
-        #     dubins_path = [(x,y,phi) for x,y,phi in zip(dx,dy,dphi)]
-        #     path = format_path(came_from, curr_node)
-        #     path = path+dubins_path
-        #     return path
-                
-        #     collided,_ = check_collision(car_img, came_from, cost_so_far, curr_node)
-        #     if collided: continue
+
+        if curr_discritized == goal_discretized: # Goal checking
+            path = format_path(curr_node, came_from)      
+            return path
         
         # cv2.circle(color_map,(int(curr_node[0]),int(curr_node[1])),3, (0,0,255),-1)    
-        for next_neighbor in find_neighbors(curr_node):
+        for next_neighbor in find_neighbors(curr_node): 
             next_node, turn_cost = next_neighbor
-            new_cost = cost_so_far[curr_discritized] + turn_cost + RESOLUTION
+            new_cost = cost_so_far[curr_discritized] + turn_cost + RESOLUTION # Include additional cost of turning
             next_discritized = discretize(next_node)
             prev_cost = cost_so_far.get(next_discritized)       
             
@@ -204,13 +239,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
             # cv2.waitKey(1)
         itr+=1
     raise ValueError("Unable to find path")
-        
-def format_path(came_from, node):
-    path = []
-    while came_from[round_node(node)] is not None: # appends nodes in path with goal as beginning
-        path.append(node)
-        node = came_from[round_node(node)]
-    return path
+    
 
 if __name__ == '__main__':
     map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
@@ -222,12 +251,12 @@ if __name__ == '__main__':
 
     cars = cv2.inRange(screen, np.array([0,0,200]), np.array([50,50,255]))
     
-    TWO_PHASES = False
+    TWO_PHASES = True
 
     # In 2 phases:
     if TWO_PHASES:
         phase1 = hybrid_a_star_path(start,center,screen)
-        phase2 = hybrid_a_star_path(phase1[0],goal,screen)
+        phase2 = hybrid_a_star_path(phase1[-1],goal,screen)
         path = phase2 + phase1
 
     # In 1 phase:
@@ -259,8 +288,8 @@ if __name__ == '__main__':
     print(f"Saved path to {filepath}")
 
     _, dil = get_bin_road(screen)
-    color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
-    # color_map = screen.copy()
+    # color_map = cv2.cvtColor(dil, cv2.COLOR_GRAY2BGR)
+    color_map = screen.copy()
     for loc in path:
         x, y, phi = loc
         center = (int(x), int(y))

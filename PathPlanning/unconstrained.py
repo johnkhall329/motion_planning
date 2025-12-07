@@ -5,7 +5,7 @@ import cv2
 
 class Unconstrained():
     '''
-    Gets a 2-D path using A* and Euclidean distance heuristic. Uses goal state as starting location and stores data as lookup table.
+    Gets a 2-D path using A* and Euclidean distance heuristic accounting for obstacles. Uses goal state as starting location and stores data as lookup table.
     '''
     def __init__(self, goal_state, map):
         self.goal = goal_state
@@ -20,6 +20,12 @@ class Unconstrained():
         self.obstacle_scale = 7.5
     
     def get_unconstrained_path(self, start_state, step_size=10):
+        """
+        Generate cost to arrive at goal from a given starting location.
+
+        :param start_state: Starting location of ego car
+        :param step_size: Distance between discretized nodes
+        """
         # cv2.circle(self.color_map,(self.goal[1]*step_size,self.goal[0]*step_size),3, (0,255,0),-1)
         # cv2.circle(self.color_map,(start_state[1]*step_size,start_state[0]*step_size),3, (255,0,0),-1)
         if self.cost_so_far.get(start_state) is not None:
@@ -61,6 +67,12 @@ class Unconstrained():
         return 1e9
 
     def replan_frontier(self,start_state,step_size):
+        """
+        Given a new starting state, update heuristic values of frontier for priority.
+        
+        :param start_state: New starting state of ego car (the desired goal of the 2d A*)
+        :param step_size: Distance between each discretized point
+        """
         new_frontier = PriorityQueue()
         while not self.frontier.empty():
             item = self.frontier.get()
@@ -73,11 +85,3 @@ class Unconstrained():
             new_h = step_size*math.sqrt((start_state[0]-curr_node[0])**2 + (start_state[1]-curr_node[1])**2)
             new_frontier.put((int(cost+new_h),curr_node))
         self.frontier = new_frontier
-
-    
-    def format_path(self, node):
-        path = []
-        while self.came_from[node] is not None: # appends nodes in path with goal as beginning
-            path.append(node)
-            node = self.came_from[node]
-        return path
