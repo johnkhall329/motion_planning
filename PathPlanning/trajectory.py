@@ -342,7 +342,6 @@ def parameterize_path_trapezoid(resampled_path: np.ndarray,
                                 vf: float,
                                 v_max: float,
                                 a_max: float,
-                                d_max: float,
                                 dt: float = 0.02) -> Tuple[np.ndarray, np.ndarray]:
     """
     Given a resampled path (M,3) from smooth_and_resample -> columns x,y,heading,
@@ -354,7 +353,6 @@ def parameterize_path_trapezoid(resampled_path: np.ndarray,
         vf: final path speed (m/s)
         v_max: max cruising speed (m/s)
         a_max: accel (m/s^2)
-        d_max: decel (m/s^2)
         dt: sample timestep for output (s)
 
     Returns:
@@ -374,7 +372,8 @@ def parameterize_path_trapezoid(resampled_path: np.ndarray,
     s_total = s[-1]
 
     # generate profile in s-space
-    t, s_traj, v_traj = generate_trapezoidal_profile(s_total, v0, vf, v_max, a_max, d_max, dt=dt)
+    # currently max deceleration = max acceleration
+    t, s_traj, v_traj = generate_trapezoidal_profile(s_total, v0, vf, v_max, a_max, a_max, dt=dt)
 
     # map s_traj -> x,y,heading using linear interpolation on s
     if len(s) < 2:
@@ -589,9 +588,8 @@ if __name__ == "__main__":
         traj, times = parameterize_path_trapezoid(resampled,
                                                   v0=5,
                                                   vf=5,
-                                                  v_max=8.0,
-                                                  a_max=3.0,
-                                                  d_max=3.0,
+                                                  v_max=6.0,
+                                                  a_max=0.5,
                                                   dt=0.02)
         quick_visual_check(hybrid_path, resampled, traj)
     except FileNotFoundError:
