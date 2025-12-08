@@ -33,7 +33,7 @@ YELLOW = (255, 255, 0)
 # METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
 
 from parameters import *
-from PathPlanning.planner import get_motion_step
+from PathPlanning.planner import get_motion_step, MotionPlanner
 
 def ppt_to_mph(ppt: float, dt) -> float:
     '''
@@ -57,6 +57,8 @@ class Car:
         self.speed = float(speed)  # absolute forward speed in "world" terms
         self.heading = 0.0  # radians, 0 = straight up the screen
         self.color = color
+        self.x_dot = 0.0
+        self.y_dot = 0.0
 
     def update(self, U, dt=1.0):
         # U = [steering angle (theta), acceleration (a)]
@@ -137,6 +139,7 @@ def main():
     lane_offset_y = 0.0
 
     running = True
+    planner = MotionPlanner(5.0, 0.0)
     while running:
         dt = clock.tick(FPS) / 1000.0  # seconds per frame
         screen.fill(GRAY)
@@ -145,8 +148,9 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-        U = get_motion_step()  # [steering angle, acceleration]
+        U = planner.maintain(ego_car, other_car, lane_offset_x, dt)
+        # print(U)
+        # U = get_motion_step()  # [steering angle, acceleration]
         ego_car.update(U, dt)
 
         # Traffic car: straight, constant speed
