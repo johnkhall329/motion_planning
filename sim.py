@@ -6,22 +6,6 @@ import cv2
 import numpy as np
 import os
 
-# -----------------------
-# Simulation Parameters
-# -----------------------
-# SCREEN_WIDTH = 800
-# SCREEN_HEIGHT = 600
-# FPS = 60
-# ROAD_WIDTH = 200
-# ROAD_WIDTH_M = 7.0 # meters
-# CAR_WIDTH = 40
-# CAR_LENGTH = 60
-# CAR_SPEED = 5.0  # initial ego speed (pixels/frame)
-# TURNING_RADIUS = 30.0 #Will need to recalculate based on maximum turning angle
-# LANE_LINE_WIDTH = 5
-# LANE_DASH_LENGTH = 40
-# LANE_GAP = 20
-
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -29,9 +13,6 @@ GRAY = (50, 50, 50)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
-
-# PIXELS_PER_METER = ROAD_WIDTH / ROAD_WIDTH_M
-# METERS_PER_PIXEL = ROAD_WIDTH_M / ROAD_WIDTH
 
 from parameters import *
 from PathPlanning.planner import get_motion_step
