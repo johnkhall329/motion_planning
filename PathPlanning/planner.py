@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import sys
 import os
+from enum import Enum
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
@@ -10,12 +11,23 @@ from parameters import *
 from PathPlanning.hybrida_star import hybrid_a_star_path
 from PathPlanning.p_rrt_star import P_RRTStar
 
-def get_motion_step():
-    # Placeholder function to simulate getting motion step from planner
-    # In a real scenario, this would interface with the planner module
-    theta = 0.0  # No steering angle change
-    a = 0.0      # No acceleration change
-    return (theta, a)
+class CarState(Enum):
+    IDLE = 'idle'
+    EXECUTING = 'ex'
+
+class MotionPlanner():
+    def __init__(self):
+        self.state = CarState.IDLE
+    
+    
+    
+
+    def get_motion_step(self):
+        # Placeholder function to simulate getting motion step from planner
+        # In a real scenario, this would interface with the planner module
+        theta = 0.0  # No steering angle change
+        a = 0.0      # No acceleration change
+        return (theta, a)
 
 
 if __name__ == '__main__':
