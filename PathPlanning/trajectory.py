@@ -27,7 +27,7 @@ except ModuleNotFoundError:
 
 # Optional: SciPy for robust cubic spline interpolation if available.
 try:
-    from scipy.interpolate import UnivariateSpline
+    from scipy.interpolate import CubicSpline
     SCIPY_AVAILABLE = True
 except Exception:
     SCIPY_AVAILABLE = False
@@ -127,27 +127,27 @@ def smooth_and_resample(path_px: np.ndarray,
 
     if smoothing and SCIPY_AVAILABLE and len(x) >= 4:
         s = cumulative_arc_length(x, y)
-        # parametric spline for x(s), y(s)
-        smoothing_factor = 0.01
-        cs_x = UnivariateSpline(s, x, s=smoothing_factor)
-        cs_y = UnivariateSpline(s, y, s=smoothing_factor)
 
-        # evaluate dense points then resample
+        from scipy.interpolate import CubicSpline
+
+        cs_x = CubicSpline(s, x, bc_type=((1, 0.0), (1, 0.0)))
+        cs_y = CubicSpline(s, y, bc_type=((1, 1.0), (1, 1.0)))
+
         s_dense = np.linspace(s[0], s[-1], max(200, len(s) * 10))
         x_dense = cs_x(s_dense)
         y_dense = cs_y(s_dense)
-        # headings: derivative-based
+
         dx_ds = cs_x.derivative()(s_dense)
         dy_ds = cs_y.derivative()(s_dense)
-        # heading convention: x right, y up
-        # atan2(dy, dx) gives angle from +x axis; subtract pi/2 so that angle=0 corresponds to +y (up)
+
         h_dense = np.arctan2(dy_ds, dx_ds) - (np.pi / 2.0)
-        # Now create uniform s_new spacing
+
         s_new = np.arange(s_dense[0], s_dense[-1] + 1e-12, spacing_m)
-        # Interpolate dense to s_new
+
         x_new = np.interp(s_new, s_dense, x_dense)
         y_new = np.interp(s_new, s_dense, y_dense)
         h_new = np.interp(s_new, s_dense, h_dense)
+
     else:
         # no scipy: do simple resample from original polyline using linear interp
         s = cumulative_arc_length(x, y)

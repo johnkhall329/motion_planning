@@ -234,7 +234,7 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     
 
 if __name__ == '__main__':
-    screen = cv2.imread('screen2.jpg', cv2.IMREAD_COLOR)
+    screen = cv2.imread('screen.jpg', cv2.IMREAD_COLOR)
     start = (450.0,450.0,0.0)
     center = (350.0,240.0,0.0)
     goal = (450.0,25.0,0.0)
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     if TWO_PHASES:
         phase1 = hybrid_a_star_path(start,center,screen)
         phase2 = hybrid_a_star_path(phase1[-1],goal,screen)
-        path = phase2 + phase1
+        path = phase1 + phase2
 
     # In 1 phase:
     else:
