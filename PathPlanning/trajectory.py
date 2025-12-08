@@ -572,6 +572,49 @@ def save_traj_to_csv(
 
     return filename
 
+def sanitize_rrt_path(path: np.ndarray,
+                      min_dist_px: float = 1.0,
+                      recompute_heading: bool = True) -> np.ndarray:
+    """
+    Clean RRT output so it is spline- and controller-safe.
+    Removes:
+      - duplicate points
+      - zero-length edges
+      - local backtracking
+    Optionally recomputes heading from geometry.
+    """
+
+    path = np.asarray(path, float)
+
+    x = path[:, 0]
+    y = path[:, 1]
+    h = path[:, 2] if path.shape[1] > 2 else None
+
+    dx = np.diff(x)
+    dy = np.diff(y)
+    dist = np.hypot(dx, dy)
+
+    # Remove zero-length + near-zero segments
+    keep = dist > min_dist_px
+    keep = np.insert(keep, 0, True)
+
+    x = x[keep]
+    y = y[keep]
+    if h is not None:
+        h = h[keep]
+
+    # OPTIONAL: recompute heading from geometry (strongly recommended for RRT)
+    if recompute_heading:
+        dx = np.gradient(x)
+        dy = np.gradient(y)
+
+        # 0 = straight UP in your convention
+        h = np.arctan2(dy, dx) - (np.pi / 2.0)
+        h = (h + np.pi) % (2*np.pi) - np.pi
+
+    cleaned = np.vstack([x, y, h]).T
+    return cleaned
+
 
 
 if __name__ == "__main__":
@@ -581,17 +624,20 @@ if __name__ == "__main__":
 
     # If a hybrid path file exists, demonstrate the pipeline
     try:
-        #TODO: Figure out how to make trajectory naturally start at 0.0 heading
-        filepath = 'hybrid_astar_path.npy'
-        hybrid_path = np.load(filepath)
-        resampled = smooth_and_resample(hybrid_path, spacing_m=0.1)
+        # filepath = 'hybrid_astar_path.npy'
+        filepath = 'rrt_path.npy'
+        path = np.load(filepath)
+
+        path = sanitize_rrt_path(path)
+
+        resampled = smooth_and_resample(path, spacing_m=0.1)
         traj, times = parameterize_path_trapezoid(resampled,
                                                   v0=5,
                                                   vf=5,
                                                   v_max=6.0,
                                                   a_max=0.5,
                                                   dt=0.02)
-        quick_visual_check(hybrid_path, resampled, traj)
+        quick_visual_check(path, resampled, traj)
     except FileNotFoundError:
         print("No example hybrid_astar_path.npy found; skip pipeline demo.")
 
