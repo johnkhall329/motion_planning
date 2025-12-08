@@ -234,7 +234,6 @@ def hybrid_a_star_path(start_loc, goal_loc, screen):
     
 
 if __name__ == '__main__':
-    map = cv2.imread('path.jpg', cv2.IMREAD_GRAYSCALE)
     screen = cv2.imread('screen2.jpg', cv2.IMREAD_COLOR)
     start = (450.0,450.0,0.0)
     center = (350.0,240.0,0.0)
@@ -255,22 +254,7 @@ if __name__ == '__main__':
     else:
         path = hybrid_a_star_path(start,goal,screen)
 
-    # cv2.imshow('masks', cv2.bitwise_or(cv2.bitwise_or(img1,img2),dil))
-    # cv2.imshow('diluted', dil)
-
     print("Time taken:", time.time() - t)
-
-    # for i, node in enumerate(path):
-    #     if i == 0:
-    #         continue
-    #     # print distance between nodes
-    #     prev = path[i-1]
-    #     dist = math.sqrt((node[0]-prev[0])**2 + (node[1]-prev[1])**2)
-    #     print(f"discretized: {discretize(node)}, actual: {node}")
-    #     # print(f"Distance from: {dist:.2f}")
-    #     if dist > 10.01:
-    #         print("prev node:", prev)
-    #         print("curr node:", node)
     
     # Length of arrow (pixels)
     ARROW_LENGTH = 5

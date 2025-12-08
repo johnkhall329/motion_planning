@@ -7,8 +7,11 @@ parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
 from parameters import *
-from PathPlanning.hybrida_star import hybrid_a_star_path
+from PathPlanning.hybrida_star import hybrid_a_star_path, dubins, Unconstrained
 from PathPlanning.p_rrt_star import P_RRTStar
+
+#TODO: Test for circular import
+import PathPlanning.control as control # make sure control.py is in path
 
 # ----------------------
 # Global trajectory control buffer
@@ -21,7 +24,6 @@ def load_controls_from_csv(csv_file='traj.csv'):
     """
     Load trajectory CSV and compute U(t) using control.py
     """
-    import PathPlanning.control as control # make sure control.py is in path
     global U_buffer, t_buffer, U_index
 
     traj = control.load_traj_from_csv(csv_file)
@@ -29,6 +31,16 @@ def load_controls_from_csv(csv_file='traj.csv'):
     t_buffer = traj[:, 0]  # timestamps
     U_index = 0
     print(f"Loaded {len(U_buffer)} control steps from {csv_file}")
+
+def load_controls_from_traj(traj):
+    """
+    Load precomputer U(t) into buffer
+    """
+    global U_buffer, t_buffer, U_index
+
+    U_buffer = control.trajectory_to_controls(traj)  # (N,2)
+    t_buffer = traj[:, 0]  # timestamps
+    U_index = 0
 
 
 def get_motion_step(dt_sim=0.02):
@@ -40,8 +52,8 @@ def get_motion_step(dt_sim=0.02):
     global U_buffer, t_buffer, U_index
 
     if U_buffer is None or t_buffer is None:
-        load_controls_from_csv()
-        # raise RuntimeError("Controls not loaded. Call load_controls_from_csv() first.")
+        print("No controls loaded yet, returning U = (0, 0)")
+        return (0,0)
 
     # current simulation time
     t_sim = U_index * dt_sim

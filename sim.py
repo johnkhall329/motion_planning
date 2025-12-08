@@ -5,6 +5,7 @@ import random
 import cv2
 import numpy as np
 import os
+import time
 
 # Colors
 WHITE = (255, 255, 255)
@@ -16,6 +17,10 @@ YELLOW = (255, 255, 0)
 
 from parameters import *
 from PathPlanning.planner import get_motion_step
+from PathPlanning.hybrida_star import hybrid_a_star_path
+from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid, quick_visual_check
+from PathPlanning.control import trajectory_to_controls
+from PathPlanning.planner import load_controls_from_traj
 
 def ppt_to_mph(ppt: float, dt) -> float:
     '''
@@ -127,6 +132,8 @@ def main():
     lane_offset_x = 0.0
     lane_offset_y = 0.0
 
+    saved = False
+
     running = True
     while running:
         dt = clock.tick(FPS) / 1000.0  # seconds per frame
@@ -193,8 +200,41 @@ def main():
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
-        # TODO: Re-implement when necessary
-        # pygame.image.save(screen, "screen.jpg")
+        
+        # TODO: Better logic for this. When we want to initialize maneuver?
+        if not saved:
+            pygame.image.save(screen, "screen.jpg")
+            saved = True
+            
+            start = (450.0,450.0,0.0)
+            center = (350.0,240.0,0.0)
+            goal = (450.0,25.0,0.0)
+
+            # Convert pygame screen → numpy → BGR
+            surf = pygame.surfarray.array3d(screen)          # shape (W, H, 3)
+            surf = np.transpose(surf, (1, 0, 2))             # now (H, W, 3) for OpenCV
+            screen_cv = cv2.cvtColor(surf, cv2.COLOR_RGB2BGR)
+            
+            stime = time.time()
+            phase1 = hybrid_a_star_path(start,center,screen_cv)
+            phase2 = hybrid_a_star_path(phase1[-1],goal,screen_cv)
+            path = phase1 + phase2
+            print("time taken for path generation:", time.time() - stime)
+
+            resampled = smooth_and_resample(path, spacing_m=0.1)
+            traj, times = parameterize_path_trapezoid(resampled,
+                                                    v0=5,
+                                                    vf=5,
+                                                    v_max=6.0,
+                                                    a_max=0.5,
+                                                    dt=0.02)
+            # Todo: come up with cleaner fix
+            traj[0,3] = 0
+
+            quick_visual_check(path, resampled, traj)
+            
+            load_controls_from_traj(traj)
+
         cv2.waitKey(1)
 
     pygame.quit()
