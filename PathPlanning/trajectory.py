@@ -21,7 +21,7 @@ import os
 import pandas as pd
 
 try:
-    from Kinematics.parameters import *
+    from parameters import *
 except ModuleNotFoundError:
     METERS_PER_PIXEL = 0.035
 

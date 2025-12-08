@@ -1,14 +1,14 @@
-try:
-    from PathPlanning.unconstrained import Unconstrained
-    from PathPlanning.dubins import plan_dubins_path as dubins
-except ModuleNotFoundError:
-    from unconstrained import Unconstrained
-    from dubins import plan_dubins_path as dubins
-# from Kinematics.states import State
 import cv2
 import numpy as np
-# from sim import TURNING_RADIUS
-TURNING_RADIUS = 100
+import sys
+import os
+
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(parent_dir)
+
+from parameters import *
+from PathPlanning.hybrida_star import hybrid_a_star_path
+from PathPlanning.p_rrt_star import P_RRTStar
 
 # ----------------------
 # Global trajectory control buffer
