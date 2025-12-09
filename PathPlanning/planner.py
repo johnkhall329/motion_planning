@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 import sys
 import os
+from enum import Enum
+import pygame
+import time
+import threading
 
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
@@ -9,76 +13,171 @@ sys.path.append(parent_dir)
 from parameters import *
 from PathPlanning.hybrida_star import hybrid_a_star_path, dubins, Unconstrained
 from PathPlanning.p_rrt_star import P_RRTStar
+import PathPlanning.control as control
+from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid
 
-#TODO: Test for circular import
-import PathPlanning.control as control # make sure control.py is in path
+class CarState(Enum):
+    IDLE = 'idle'
+    EXECUTING = 'ex'
 
-# ----------------------
-# Global trajectory control buffer
-# ----------------------
-U_buffer = None
-t_buffer = None
-U_index = 0
+class MotionPlanner():
+    def __init__(self, idle_speed, idle_heading=0.0, spacing=250.0):
+        self.state = CarState.IDLE
+        self.idle_speed = idle_speed
+        self.idle_heading = idle_heading
+        self.spacing = spacing
+        
+        self.K_x = 0.025
+        self.K_xd = 0.1
+        self.K_heading = 0.025
+        self.K_heading_i = 5.0
+        self.I_heading = 0.0
+        
+        self.K_v = 0.25
+        self.K_v_rel = 0.1
+        self.K_v_rel_i = 0.001
+        self.K_dist = 0.005
+        self.K_dist_d = 0.000001
+        
+        self.I_v_rel = 0.0
+        # Control buffers (when following a precomputed traj)
+        self.U_buffer = None
+        self.t_buffer = None
+        self.U_index = 0
 
-def load_controls_from_csv(csv_file='traj.csv'):
-    """
-    Load trajectory CSV and compute U(t) using control.py
-    """
-    global U_buffer, t_buffer, U_index
+        self.planning_thread = None
+        self.planning_in_progress = False
+        self.pending_traj = None
+           
 
-    traj = control.load_traj_from_csv(csv_file)
-    U_buffer = control.trajectory_to_controls(traj)  # (N,2)
-    t_buffer = traj[:, 0]  # timestamps
-    U_index = 0
-    print(f"Loaded {len(U_buffer)} control steps from {csv_file}")
+    def maintain(self, ego, nonego, lane_offset, dt):
+        # LANE CONTROL (steering)
+        if abs(ego.heading-self.idle_heading) <= 1e-2:
+            self.I_heading = ego.heading-self.idle_heading
+        else:
+            self.I_heading+=(ego.heading-self.idle_heading)*dt
+        theta = -self.K_x*lane_offset - self.K_heading*(ego.heading-self.idle_heading) + self.K_xd*ego.x_dot - self.K_heading_i*self.I_heading
+        # DISTANCE
+        e_d = ego.y-nonego.y
 
-def load_controls_from_traj(traj):
-    """
-    Load precomputer U(t) into buffer
-    """
-    global U_buffer, t_buffer, U_index
+        # LONGITUDINAL CONTROL
+        a_speed = self.K_v * (self.idle_speed - ego.speed)
+        if e_d < self.spacing and e_d > 0:
+            self.I_v_rel += (ego.speed - nonego.speed)*dt
+            if (ego.speed - nonego.speed) <= 0:
+                self.I_v_rel = (ego.speed - nonego.speed)*dt
+                e_d = 0.99*self.spacing
+            a_dist = -self.K_dist * (self.spacing-e_d) + -self.K_v_rel * (ego.speed - nonego.speed) - self.K_dist_d * (self.spacing-e_d)/dt - self.K_v_rel_i* self.I_v_rel
+        elif e_d < self.spacing and e_d > 0 and (ego.speed - nonego.speed) > 0:
+            a_dist = -0.5*self.K_v_rel * (ego.speed - nonego.speed)
+            # else:
+            #     self.I_v_rel = (ego.speed - nonego.speed)*dt
+            #     a_dist = -5*self.K_v_rel * (ego.speed - nonego.speed) - self.K_v_rel_i * self.I_v_rel
+        else:
+            self.I_v_rel = 0.0
+            a_dist = 1e9
 
-    U_buffer = control.trajectory_to_controls(traj)  # (N,2)
-    t_buffer = traj[:, 0]  # timestamps
-    U_index = 0
+        # SAFETY-CRITICAL CONTROL SELECTION
+        a = min(a_speed, a_dist)
+
+        # Clamp outputs
+        theta = np.clip(theta, -10, 10)
+        a = np.clip(a, -0.5, 0.5)
+        return (theta, a)
+    
+    def load_controls_from_csv(self, csv_file='traj.csv'):
+        """Load trajectory CSV and compute U(t) using control.py into this planner instance."""
+        traj = control.load_traj_from_csv(csv_file)
+        self.U_buffer = control.trajectory_to_controls(traj)  # (N,2)
+        self.t_buffer = traj[:, 0]  # timestamps
+        self.U_index = 0
+        print(f"Loaded {len(self.U_buffer)} control steps from {csv_file}")
+
+    def load_controls_from_traj(self, traj):
+        """Load precomputed U(t) into this planner instance from a traj ndarray."""
+        self.U_buffer = control.trajectory_to_controls(traj)  # (N,2)
+        self.t_buffer = traj[:, 0]  # timestamps
+        self.U_index = 0
+
+    def prep_path_async(self, screen):
+        """Launch path planning in a background thread."""
+
+        if self.planning_in_progress:
+            print("Planner already running!")
+            return
+
+        # --- Copy screen safely in main thread ---
+        surf = pygame.surfarray.array3d(screen)
+        surf = np.transpose(surf, (1, 0, 2))
+        screen_cv = cv2.cvtColor(surf, cv2.COLOR_RGB2BGR)
+
+        self.planning_in_progress = True
+
+        def worker():
+            print("Planning started in background thread...")
+            stime = time.time()
+
+            start = (450.0, 450.0, 0.0)
+            center = (350.0, 240.0, 0.0)
+            goal = (450.0, 25.0, 0.0)
+
+            phase1 = hybrid_a_star_path(start, center, screen_cv)
+            phase2 = hybrid_a_star_path(phase1[-1], goal, screen_cv)
+            path = phase1 + phase2
+
+            resampled = smooth_and_resample(path, spacing_m=0.1)
+
+            traj, times = parameterize_path_trapezoid(
+                resampled,
+                v0=5,
+                vf=4,
+                v_max=6.0,
+                a_max=0.5,
+                dt=0.02
+            )
+
+            self.pending_traj = traj
+            self.planning_in_progress = False
+
+            print("Planning finished in:", time.time() - stime)
+
+        self.planning_thread = threading.Thread(target=worker, daemon=True)
+        self.planning_thread.start()
 
 
-def get_motion_step(dt_sim=0.02):
-    """
-    Return [theta, a] for the current simulation step.
+    def overtake_step(self, dt_sim=0.02):
+        """
+        Return [theta, a] for the current simulation step by interpolating the precomputed control buffer.
+        This replaces the previous module-level get_motion_step function.
+        """
+        if self.U_buffer is None or self.t_buffer is None:
+            print("No controls loaded yet, returning U = (0, 0)")
+            return (0, 0)
 
-    Uses interpolation if dt_sim != dt_traj.
-    """
-    global U_buffer, t_buffer, U_index
+        # current simulation time
+        t_sim = self.U_index * dt_sim
 
-    if U_buffer is None or t_buffer is None:
-        print("No controls loaded yet, returning U = (0, 0)")
-        return (0,0)
+        # if we exceeded trajectory time, hold last control
+        if t_sim >= self.t_buffer[-1]:
+            print("done")
+            return (-1, -1)
 
-    # current simulation time
-    t_sim = U_index * dt_sim
+        # find surrounding indices for interpolation
+        idx_next = np.searchsorted(self.t_buffer, t_sim, side='right')
+        idx_prev = max(0, idx_next - 1)
 
-    # if we exceeded trajectory time, hold last control
-    if t_sim >= t_buffer[-1]:
-        print("done")
-        return [0, 0]
+        t0, t1 = self.t_buffer[idx_prev], self.t_buffer[idx_next]
+        U0, U1 = self.U_buffer[idx_prev], self.U_buffer[idx_next]
 
-    # find surrounding indices for interpolation
-    idx_next = np.searchsorted(t_buffer, t_sim, side='right')
-    idx_prev = max(0, idx_next - 1)
+        # linear interpolation
+        if t1 - t0 < 1e-6:
+            U_interp = U0
+        else:
+            alpha = (t_sim - t0) / (t1 - t0)
+            U_interp = (1 - alpha) * U0 + alpha * U1
 
-    t0, t1 = t_buffer[idx_prev], t_buffer[idx_next]
-    U0, U1 = U_buffer[idx_prev], U_buffer[idx_next]
-
-    # linear interpolation
-    if t1 - t0 < 1e-6:
-        U_interp = U0
-    else:
-        alpha = (t_sim - t0) / (t1 - t0)
-        U_interp = (1 - alpha) * U0 + alpha * U1
-
-    U_index += 1
-    return U_interp.tolist()
+        self.U_index += 1
+        return U_interp.tolist()
 
 
 if __name__ == '__main__':

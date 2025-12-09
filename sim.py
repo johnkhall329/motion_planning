@@ -16,11 +16,10 @@ RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 
 from parameters import *
-from PathPlanning.planner import get_motion_step
+from PathPlanning.planner import MotionPlanner
 from PathPlanning.hybrida_star import hybrid_a_star_path
 from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid, quick_visual_check
 from PathPlanning.control import trajectory_to_controls
-from PathPlanning.planner import load_controls_from_traj
 
 def ppt_to_mph(ppt: float, dt) -> float:
     '''
@@ -44,6 +43,8 @@ class Car:
         self.speed = float(speed)  # absolute forward speed in "world" terms
         self.heading = 0.0  # radians, 0 = straight up the screen
         self.color = color
+        self.x_dot = 0.0
+        self.y_dot = 0.0
 
     def update(self, U, dt=1.0):
         dt = .02
@@ -132,21 +133,33 @@ def main():
     lane_offset_x = 0.0
     lane_offset_y = 0.0
 
-    saved = False
+    overtaking = False
 
     running = True
+    planner = MotionPlanner(5.0, 0.0)
     while running:
         dt = clock.tick(FPS) / 1000.0  # seconds per frame
         screen.fill(GRAY)
-        # TODO: COME BACK HERE
-        # print(dt)
 
         # --- Events ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+        
+        if planner.pending_traj is not None:
+            planner.load_controls_from_traj(planner.pending_traj)
+            planner.pending_traj = None
+            overtaking = True
+            print("Trajectory loaded, executing overtake")
 
-        U = get_motion_step()  # [steering angle, acceleration]
+        if not overtaking:
+            U = planner.maintain(ego_car, other_car, lane_offset_x, dt)
+        else:
+            U = planner.overtake_step()
+            if U == (-1, -1):  # done with maneuver
+                overtaking = False
+                U = (0, 0)
+
         ego_car.update(U, dt)
 
         # Traffic car: straight, constant speed
@@ -158,16 +171,22 @@ def main():
         other_car.x_dot = other_car.speed * -math.sin(other_car.heading)
         other_car.y_dot = other_car.speed * math.cos(other_car.heading)
 
-        # # --- Manual controls (optional override) ---
-        # keys = pygame.key.get_pressed()
-        # if keys[pygame.K_UP]:
-        #     ego_car.speed += 0.1
-        # if keys[pygame.K_DOWN]:
-        #     ego_car.speed = max(0.0, ego_car.speed - 0.1)
-        # if keys[pygame.K_LEFT]:
-        #     ego_car.heading += math.radians(0.5)
-        # if keys[pygame.K_RIGHT]:
-        #     ego_car.heading -= math.radians(0.5)
+        # --- Manual controls (optional override) ---
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_UP]:
+            ego_car.speed += 0.1
+        if keys[pygame.K_DOWN]:
+            ego_car.speed = max(0.0, ego_car.speed - 0.1)
+        if keys[pygame.K_LEFT]:
+            ego_car.heading += math.radians(0.5)
+        if keys[pygame.K_RIGHT]:
+            ego_car.heading -= math.radians(0.5)
+
+        if keys[pygame.K_o]:
+            print("Initializing overtake")
+            overtaking = True
+            planner.prep_path_async(screen)
+
 
         # --- Road scrolls with ego motion ---
         lane_offset_y += ego_car.y_dot
@@ -200,40 +219,7 @@ def main():
         screen.blit(txt, (10, 10))
 
         pygame.display.flip()
-        
-        # TODO: Better logic for this. When we want to initialize maneuver?
-        if not saved:
-            pygame.image.save(screen, "screen.jpg")
-            saved = True
-            
-            start = (450.0,450.0,0.0)
-            center = (350.0,240.0,0.0)
-            goal = (450.0,25.0,0.0)
-
-            # Convert pygame screen → numpy → BGR
-            surf = pygame.surfarray.array3d(screen)          # shape (W, H, 3)
-            surf = np.transpose(surf, (1, 0, 2))             # now (H, W, 3) for OpenCV
-            screen_cv = cv2.cvtColor(surf, cv2.COLOR_RGB2BGR)
-            
-            stime = time.time()
-            phase1 = hybrid_a_star_path(start,center,screen_cv)
-            phase2 = hybrid_a_star_path(phase1[-1],goal,screen_cv)
-            path = phase1 + phase2
-            print("time taken for path generation:", time.time() - stime)
-
-            resampled = smooth_and_resample(path, spacing_m=0.1)
-            traj, times = parameterize_path_trapezoid(resampled,
-                                                    v0=5,
-                                                    vf=5,
-                                                    v_max=6.0,
-                                                    a_max=0.5,
-                                                    dt=0.02)
-            # Todo: come up with cleaner fix
-            traj[0,3] = 0
-
-            quick_visual_check(path, resampled, traj)
-            
-            load_controls_from_traj(traj)
+    
 
         cv2.waitKey(1)
 
