@@ -17,21 +17,9 @@ YELLOW = (255, 255, 0)
 
 from parameters import *
 from PathPlanning.planner import MotionPlanner
-from PathPlanning.hybrida_star import hybrid_a_star_path
-from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid, quick_visual_check
-from PathPlanning.control import trajectory_to_controls
 
-def ppt_to_mph(ppt: float, dt) -> float:
-    '''
-    Convert pixels per tick to miles per hour
-    '''
-    return ppt * METERS_PER_PIXEL / dt * 2.23694  # 1 m/s = 2.23694 mph
+FIXED_DT = 0.02   # ✅ CONTROL TIMESTEP (50 Hz)
 
-def ppt_to_kmh(ppt: float, dt) -> float:
-    '''
-    Convert pixels per tick to kilometers per hour
-    '''
-    return ppt * METERS_PER_PIXEL / dt * 3.6  # 1 m/s = 3.6 km/h
 
 # -----------------------
 # Car Class (screen coords)
@@ -39,35 +27,23 @@ def ppt_to_kmh(ppt: float, dt) -> float:
 class Car:
     def __init__(self, x, y, speed=0.0, color=BLUE):
         self.x = x
-        self.y = float(y)   # pixel coordinate on screen (float for smooth updates)
-        self.speed = float(speed)  # absolute forward speed in "world" terms
-        self.heading = 0.0  # radians, 0 = straight up the screen
+        self.y = float(y)
+        self.speed = float(speed)
+        self.heading = 0.0
         self.color = color
         self.x_dot = 0.0
         self.y_dot = 0.0
 
-    def update(self, U, dt=1.0):
-        dt = .02
-        # U = [steering angle (theta), acceleration (a)]
+    def update(self, U, dt):
         theta, a = U
-        v_dot = a  # acceleration
-        self.speed += v_dot * dt
-        phi_dot = self.speed * math.tan(theta) / CAR_LENGTH  # simple bicycle model
-        # print(math.degrees(self.heading))
+
+        self.speed += a * dt
+        phi_dot = self.speed * math.tan(theta) / CAR_LENGTH
         self.heading += phi_dot * dt
+
         self.x_dot = self.speed * -math.sin(self.heading)
         self.y_dot = self.speed * math.cos(self.heading)
-        
-        # Append to real.csv
-        csv_filename = "real.csv"
-        file_exists = os.path.exists(csv_filename)
-        with open(csv_filename, 'a') as f:
-            if not file_exists:
-                # Write header if file is new
-                f.write("x,y,speed,heading\n")
-            # Append the current state
-            f.write(f"{self.x:.6f},{self.y:.6f},{self.speed:.6f},{self.heading:.6f}\n")
-        
+
         return [self.x_dot * dt, self.y_dot * dt, phi_dot * dt]
 
     def draw(self, screen):
@@ -87,28 +63,29 @@ def draw_lane_lines(screen, offset_y, offset_x):
     offset_y = offset_y % seg
     start_y = -seg * 3
     end_y = SCREEN_HEIGHT + seg * 3
+
     for y in range(start_y, end_y, seg):
         dash_y = y + offset_y
         pygame.draw.rect(
             screen,
             YELLOW,
-            pygame.Rect(center_x - LANE_LINE_WIDTH // 2, int(dash_y),
-                        LANE_LINE_WIDTH, LANE_DASH_LENGTH)
+            pygame.Rect(center_x - LANE_LINE_WIDTH // 2,
+                        int(dash_y),
+                        LANE_LINE_WIDTH,
+                        LANE_DASH_LENGTH)
         )
+
     pygame.draw.rect(
-        screen,
-        WHITE,
-        pygame.Rect(center_x - ROAD_WIDTH // 2,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
-    )
-    pygame.draw.rect(
-        screen,
-        WHITE,
-        pygame.Rect(center_x + ROAD_WIDTH // 2 - LANE_LINE_WIDTH,0,LANE_LINE_WIDTH, SCREEN_HEIGHT)
+        screen, WHITE,
+        pygame.Rect(center_x - ROAD_WIDTH // 2, 0,
+                    LANE_LINE_WIDTH, SCREEN_HEIGHT)
     )
 
-
-    
-
+    pygame.draw.rect(
+        screen, WHITE,
+        pygame.Rect(center_x + ROAD_WIDTH // 2 - LANE_LINE_WIDTH, 0,
+                    LANE_LINE_WIDTH, SCREEN_HEIGHT)
+    )
 
 
 # -----------------------
@@ -117,85 +94,111 @@ def draw_lane_lines(screen, offset_y, offset_x):
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Relative Motion: ego vs traffic (screen coords)")
+    pygame.display.set_caption("Relative Motion: ego vs traffic")
     clock = pygame.time.Clock()
 
     # lane x positions
     right_lane_x = SCREEN_WIDTH // 2 + ROAD_WIDTH // 4
-    left_lane_x = SCREEN_WIDTH // 2 - ROAD_WIDTH // 4
 
-    # Ego car (fixed on screen, as a Car object)
-    ego_car = Car(right_lane_x, int(SCREEN_HEIGHT * 0.75), speed=CAR_SPEED, color=BLUE)
+    ego_car = Car(right_lane_x, int(SCREEN_HEIGHT * 0.75),
+                  speed=CAR_SPEED, color=BLUE)
 
-    # Single traffic car (screen y starts up the screen)
-    other_car = Car(right_lane_x, SCREEN_HEIGHT * 0.25, speed=4.0, color=RED)
+    other_car = Car(right_lane_x, SCREEN_HEIGHT * 0.25,
+                    speed=4.0, color=RED)
 
     lane_offset_x = 0.0
     lane_offset_y = 0.0
 
     overtaking = False
-    # Planner state: 'start' -> before any overtake, 'planning1' -> planning phase1,
-    # 'executing1' -> executing phase1, 'passing' -> in left lane after phase1,
-    # 'planning2' -> planning phase2, 'executing2' -> executing phase2, 'passed' -> finished
     planner_state = 'start'
     overtaking_phase = 0
 
-    running = True
     planner = MotionPlanner(5.0, 0.0)
-    while running:
-        dt = clock.tick(FPS) / 1000.0  # seconds per frame
-        screen.fill(GRAY)
 
-        # --- Events ---
+    accumulator = 0.0
+    last_time = time.time()
+
+    running = True
+    while running:
+
+        # -------------------------
+        # REAL TIME TRACKING
+        # -------------------------
+        now = time.time()
+        frame_dt = now - last_time
+        last_time = now
+        accumulator += frame_dt
+
+        # -------------------------
+        # EVENTS
+        # -------------------------
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-        
+
+        keys = pygame.key.get_pressed()
+
+        # -------------------------
+        # APPLY FINISHED PLANS
+        # -------------------------
         if planner.pending_traj is not None:
             planner.load_controls_from_traj(planner.pending_traj)
-            # record which phase this trajectory belongs to
             overtaking_phase = planner.pending_phase
             planner.pending_traj = None
             overtaking = True
+
             if overtaking_phase == 1:
                 planner_state = 'executing1'
             elif overtaking_phase == 2:
                 planner_state = 'executing2'
             else:
                 planner_state = 'executing'
-            print(f"Trajectory for phase {overtaking_phase} loaded, executing overtake")
 
-        if not overtaking:
-            U = planner.maintain(ego_car, other_car, lane_offset_x, dt)
-        else:
-            U = planner.overtake_step()
-            if U == (-1, -1):  # done with maneuver
-                # finished executing current planned phase
-                overtaking = False
-                if overtaking_phase == 1:
-                    # completed first half: switch to passing (left lane) behavior
-                    planner_state = 'passing'
-                    planner.idle_speed = 5.0
-                    print(f"Phase 1 complete: now maintaining left lane at {int(planner.idle_speed)} m/s")
-                elif overtaking_phase == 2:
-                    planner_state = 'passed'
-                    planner.idle_speed = 4.0
-                    print(f"Phase 2 complete: finished overtake, maintaining lane at {int(planner.idle_speed)} m/s")
-                U = (0, 0)
+        # -------------------------
+        # FIXED-TIMESTEP CONTROL
+        # -------------------------
+        while accumulator >= FIXED_DT:
 
-        ego_car.update(U, dt)
+            if not overtaking:
+                U = planner.maintain(
+                    ego_car, other_car, lane_offset_x, FIXED_DT)
+            else:
+                U = planner.overtake_step()
+                if U == (-1, -1):
+                    overtaking = False
 
-        # Traffic car: straight, constant speed
-        if not hasattr(other_car, 'x_dot'):
-            other_car.x_dot = 0.0
-        if not hasattr(other_car, 'y_dot'):
-            other_car.y_dot = other_car.speed
-        other_car.heading = 0.0
-        other_car.x_dot = other_car.speed * -math.sin(other_car.heading)
-        other_car.y_dot = other_car.speed * math.cos(other_car.heading)
+                    if overtaking_phase == 1:
+                        planner_state = 'passing'
+                        planner.idle_speed = 5.0
+                        planner.in_left_lane = True
 
-        # --- Manual controls (optional override) ---
-        keys = pygame.key.get_pressed()
+                    elif overtaking_phase == 2:
+                        planner_state = 'passed'
+                        planner.idle_speed = 4.0
+                        planner.in_left_lane = False
+
+                    U = (0, 0)
+
+            ego_car.update(U, FIXED_DT)
+
+            # traffic car update (relative world)
+            other_car.heading = 0.0
+            other_car.x_dot = other_car.speed * -math.sin(other_car.heading)
+            other_car.y_dot = other_car.speed * math.cos(other_car.heading)
+
+            lane_offset_y += ego_car.y_dot
+            lane_offset_x -= ego_car.x_dot
+
+            dy = ego_car.y_dot - other_car.y_dot
+            dx = ego_car.x_dot - other_car.x_dot
+            other_car.y += dy
+            other_car.x -= dx
+
+            accumulator -= FIXED_DT
+
+        # -------------------------
+        # MANUAL INPUT
+        # -------------------------
         if keys[pygame.K_UP]:
             ego_car.speed += 0.1
         if keys[pygame.K_DOWN]:
@@ -205,60 +208,59 @@ def main():
         if keys[pygame.K_RIGHT]:
             ego_car.heading -= math.radians(0.5)
 
-        # Trigger planning/execution for the two staged phases
+        # -------------------------
+        # PHASE TRIGGERS
+        # -------------------------
         if keys[pygame.K_a]:
-            # Plan and execute phase 1 (start -> intermediate)
-            if planner_state != 'start':
-                print("Warning: Phase 1 (A) ignored — already started or in left lane")
-            else:
-                print("Requesting Phase 1 planning (A)")
-                planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed, phase=1)
+            if planner_state == 'start':
+                planner.prep_path_async(
+                    screen,
+                    center_y=other_car.y,
+                    ego_speed=ego_car.speed,
+                    phase=1
+                )
                 planner_state = 'planning1'
 
         if keys[pygame.K_d]:
-            # Plan and execute phase 2 (intermediate -> goal)
-            if planner_state != 'passing':
-                print("Warning: Phase 2 (D) ignored — must press A and complete phase1 first")
-            else:
-                print("Requesting Phase 2 planning (D)")
-                planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed, phase=2)
+            if planner_state == 'passing':
+                planner.prep_path_async(
+                    screen,
+                    center_y=other_car.y,
+                    ego_speed=ego_car.speed,
+                    phase=2
+                )
                 planner_state = 'planning2'
 
+        # -------------------------
+        # DRAW
+        # -------------------------
+        screen.fill(GRAY)
 
-        # --- Road scrolls with ego motion ---
-        lane_offset_y += ego_car.y_dot
-        lane_offset_x -= ego_car.x_dot
-
-        # --- Update traffic car in screen coords (relative to ego) ---
-        dy = ego_car.y_dot - other_car.y_dot
-        dx = ego_car.x_dot - other_car.x_dot
-        other_car.y += dy
-        other_car.x -= dx
-
-        # --- Draw road and lane dashes (they move with ego motion) ---
-        road_rect = pygame.Rect((SCREEN_WIDTH - ROAD_WIDTH) // 2 + int(lane_offset_x),
-                                0, ROAD_WIDTH, SCREEN_HEIGHT)
+        road_rect = pygame.Rect(
+            (SCREEN_WIDTH - ROAD_WIDTH) // 2 + int(lane_offset_x),
+            0,
+            ROAD_WIDTH,
+            SCREEN_HEIGHT
+        )
         pygame.draw.rect(screen, BLACK, road_rect)
         draw_lane_lines(screen, lane_offset_y, lane_offset_x)
 
-        # --- Draw traffic car ---
         other_car.draw(screen)
-        # print(ego_car.heading)
-
-        # --- Draw ego car fixed on screen ---
         ego_car.draw(screen)
 
-        # cv2.imshow('binary road', road_bin)
-
-        # HUD
         font = pygame.font.SysFont(None, 20)
-        txt = font.render(f"ego_speed: {(ego_car.speed):.2f}   other_speed: {(other_car.speed):.2f}", True, WHITE)
+        txt = font.render(
+            f"ego_speed: {ego_car.speed:.2f}   other_speed: {other_car.speed:.2f}",
+            True, WHITE
+        )
         screen.blit(txt, (10, 10))
 
-        pygame.display.flip()
-    
+        if planner.planning_in_progress:
+            plan_txt = font.render("PLANNING...", True, YELLOW)
+            screen.blit(plan_txt, (10, 30))
 
-        cv2.waitKey(1)
+        pygame.display.flip()
+        clock.tick(FPS)
 
     pygame.quit()
     sys.exit()
