@@ -112,6 +112,8 @@ def main():
     overtaking = False
     planner_state = 'start'
     overtaking_phase = 0
+    # Full (uncancellable) overtake mode
+    full_overtake_active = False
 
     planner = MotionPlanner(5.0, 0.0)
 
@@ -176,6 +178,9 @@ def main():
                         planner_state = 'passed'
                         planner.idle_speed = 4.0
                         planner.in_left_lane = False
+                        # clear full-uncancellable overtake mode when phase 2 completes
+                        if full_overtake_active:
+                            full_overtake_active = False
 
                     U = (0, 0)
 
@@ -212,7 +217,8 @@ def main():
         # PHASE TRIGGERS
         # -------------------------
         if keys[pygame.K_a]:
-            if planner_state == 'start':
+            # Only allow manual A if not in full-uncancellable overtake
+            if (not full_overtake_active) and planner_state == 'start':
                 planner.prep_path_async(
                     screen,
                     center_y=other_car.y,
@@ -222,7 +228,8 @@ def main():
                 planner_state = 'planning1'
 
         if keys[pygame.K_d]:
-            if planner_state == 'passing':
+            # Only allow manual D if not in full-uncancellable overtake
+            if (not full_overtake_active) and planner_state == 'passing':
                 planner.prep_path_async(
                     screen,
                     center_y=other_car.y,
@@ -230,6 +237,20 @@ def main():
                     phase=2
                 )
                 planner_state = 'planning2'
+
+        # Full (uncancellable) overtake: start entire maneuver with 'O'
+        if keys[pygame.K_o]:
+            # Only trigger from the start state and if not already in full mode
+            if (not full_overtake_active) and planner_state == 'start':
+                # Begin phase 1 planning just like pressing 'A'
+                planner.prep_path_async(
+                    screen,
+                    center_y=other_car.y,
+                    ego_speed=ego_car.speed,
+                    phase=1
+                )
+                planner_state = 'planning1'
+                full_overtake_active = True
 
         # -------------------------
         # DRAW
@@ -258,6 +279,20 @@ def main():
         if planner.planning_in_progress:
             plan_txt = font.render("PLANNING...", True, YELLOW)
             screen.blit(plan_txt, (10, 30))
+
+        # If we're in full overtake mode, automatically start phase 2 when
+        # we've passed into position 25 px in front of the non-ego car.
+        # other_car.y is ego-centric; trigger when it reaches ~475.
+        if full_overtake_active and planner_state == 'passing' and not planner.planning_in_progress:
+            # Use >= to be robust against missed exact equality
+            if other_car.y >= 475:
+                planner.prep_path_async(
+                    screen,
+                    center_y=other_car.y,
+                    ego_speed=ego_car.speed,
+                    phase=2
+                )
+                planner_state = 'planning2'
 
         pygame.display.flip()
         clock.tick(FPS)
