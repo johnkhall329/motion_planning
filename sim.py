@@ -134,6 +134,11 @@ def main():
     lane_offset_y = 0.0
 
     overtaking = False
+    # Planner state: 'start' -> before any overtake, 'planning1' -> planning phase1,
+    # 'executing1' -> executing phase1, 'passing' -> in left lane after phase1,
+    # 'planning2' -> planning phase2, 'executing2' -> executing phase2, 'passed' -> finished
+    planner_state = 'start'
+    overtaking_phase = 0
 
     running = True
     planner = MotionPlanner(5.0, 0.0)
@@ -148,16 +153,34 @@ def main():
         
         if planner.pending_traj is not None:
             planner.load_controls_from_traj(planner.pending_traj)
+            # record which phase this trajectory belongs to
+            overtaking_phase = planner.pending_phase
             planner.pending_traj = None
             overtaking = True
-            print("Trajectory loaded, executing overtake")
+            if overtaking_phase == 1:
+                planner_state = 'executing1'
+            elif overtaking_phase == 2:
+                planner_state = 'executing2'
+            else:
+                planner_state = 'executing'
+            print(f"Trajectory for phase {overtaking_phase} loaded, executing overtake")
 
         if not overtaking:
             U = planner.maintain(ego_car, other_car, lane_offset_x, dt)
         else:
             U = planner.overtake_step()
             if U == (-1, -1):  # done with maneuver
+                # finished executing current planned phase
                 overtaking = False
+                if overtaking_phase == 1:
+                    # completed first half: switch to passing (left lane) behavior
+                    planner_state = 'passing'
+                    planner.idle_speed = 5.0
+                    print(f"Phase 1 complete: now maintaining left lane at {int(planner.idle_speed)} m/s")
+                elif overtaking_phase == 2:
+                    planner_state = 'passed'
+                    planner.idle_speed = 4.0
+                    print(f"Phase 2 complete: finished overtake, maintaining lane at {int(planner.idle_speed)} m/s")
                 U = (0, 0)
 
         ego_car.update(U, dt)
@@ -182,12 +205,24 @@ def main():
         if keys[pygame.K_RIGHT]:
             ego_car.heading -= math.radians(0.5)
 
-        if keys[pygame.K_o]:
-            print("Initializing overtake")
-            overtaking = True
-            # Pass the traffic car's current y position as the intermediate waypoint
-            # and the ego car's current speed as the trajectory start speed.
-            planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed)
+        # Trigger planning/execution for the two staged phases
+        if keys[pygame.K_a]:
+            # Plan and execute phase 1 (start -> intermediate)
+            if planner_state != 'start':
+                print("Warning: Phase 1 (A) ignored — already started or in left lane")
+            else:
+                print("Requesting Phase 1 planning (A)")
+                planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed, phase=1)
+                planner_state = 'planning1'
+
+        if keys[pygame.K_d]:
+            # Plan and execute phase 2 (intermediate -> goal)
+            if planner_state != 'passing':
+                print("Warning: Phase 2 (D) ignored — must press A and complete phase1 first")
+            else:
+                print("Requesting Phase 2 planning (D)")
+                planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed, phase=2)
+                planner_state = 'planning2'
 
 
         # --- Road scrolls with ego motion ---

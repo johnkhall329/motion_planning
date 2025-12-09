@@ -123,11 +123,7 @@ def simulate_trajectory(traj: np.ndarray, U: np.ndarray, dt: float = 0.02):
     state = State(traj[0, 1], traj[0, 2], traj[0, 5], traj[0, 3])
     states.append(state.copy())
     for i in range(len(U)):
-        print("Turning angle:", math.degrees(U[i][0]))
-        print("Prev heading:", math.degrees(state[3]))
         state = control_input(state, U[i], dt)
-        print("New heading:", math.degrees(state[3]))
-        print()
         states.append(state.copy())
     return states
 

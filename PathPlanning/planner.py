@@ -48,6 +48,7 @@ class MotionPlanner():
         self.planning_thread = None
         self.planning_in_progress = False
         self.pending_traj = None
+        self.pending_phase = 0
            
 
     def maintain(self, ego, nonego, lane_offset, dt):
@@ -96,10 +97,29 @@ class MotionPlanner():
     def load_controls_from_traj(self, traj):
         """Load precomputed U(t) into this planner instance from a traj ndarray."""
         self.U_buffer = control.trajectory_to_controls(traj)  # (N,2)
+
+        # simulate forward
+        # U = self.U_buffer
+        # states = control.simulate_trajectory(traj, U, dt=np.mean(np.gradient(traj[:, 0])))
+        # xs = [s.x for s in states]
+        # ys = [s.y for s in states]
+
+        # import matplotlib.pyplot as plt
+        # plt.figure()
+        # plt.plot(traj[:, 1], traj[:, 2], 'r--', label='Reference Path')
+        # plt.plot(xs, ys, 'b-', label='Simulated Path')
+        # plt.axis('equal')
+        # plt.xlabel('x (m)')
+        # plt.ylabel('y (m)')
+        # plt.title('Trajectory Simulation with Feedforward Controls')
+        # plt.legend()
+        # plt.show()
+
+
         self.t_buffer = traj[:, 0]  # timestamps
         self.U_index = 0
 
-    def prep_path_async(self, screen, center_y: float = None, ego_speed: float = None):
+    def prep_path_async(self, screen, center_y: float = None, ego_speed: float = None, phase: int = 0):
         """Launch path planning in a background thread.
 
         Parameters
@@ -125,6 +145,8 @@ class MotionPlanner():
         surf = np.transpose(surf, (1, 0, 2))
         screen_cv = cv2.cvtColor(surf, cv2.COLOR_RGB2BGR)
 
+        # remember which phase is being planned (0 = both/full, 1 = first half, 2 = second half)
+        self.pending_phase = int(phase)
         self.planning_in_progress = True
 
         def worker():
@@ -133,29 +155,58 @@ class MotionPlanner():
 
             # determine waypoints; keep x fixed, allow center.y to be set
             start = (450.0, 450.0, 0.0)
-            c_y = center_y if center_y is not None else 240.0
-            center = (350.0, float(c_y), 0.0)
-            goal = (450.0, 25.0, 0.0)
+            center = (325.0, 250, 0.0)
+            goal = (475.0, 25.0, 0.0)
 
-            phase1 = hybrid_a_star_path(start, center, screen_cv)
-            phase2 = hybrid_a_star_path(phase1[-1], goal, screen_cv)
-            path = phase1 + phase2
-
-            resampled = smooth_and_resample(path, spacing_m=0.1)
-
-            v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
-            traj, times = parameterize_path_trapezoid(
-                resampled,
-                v0=v0,
-                vf=4,
-                v_max=6.0,
-                a_max=0.5,
-                dt=0.02
-            )
+            # Plan depending on requested phase
+            if self.pending_phase == 1:
+                # only plan first half: start -> center
+                phase1 = hybrid_a_star_path(start, center, screen_cv)
+                path = phase1
+                # parameterize: start speed -> target vf = 6
+                v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
+                traj, times = parameterize_path_trapezoid(
+                    smooth_and_resample(path, spacing_m=0.1),
+                    v0=v0,
+                    vf=5.0,
+                    v_max=6.0,
+                    a_max=0.5,
+                    dt=0.02
+                )
+            elif self.pending_phase == 2:
+                # only plan second half: center -> goal
+                # Use the center point as the nominal start for phase2
+                phase1_tmp = hybrid_a_star_path(start, center, screen_cv)
+                phase2 = hybrid_a_star_path(phase1_tmp[-1], goal, screen_cv)
+                path = phase2
+                v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
+                traj, times = parameterize_path_trapezoid(
+                    smooth_and_resample(path, spacing_m=0.1),
+                    v0=v0,
+                    vf=5.0,
+                    v_max=6.0,
+                    a_max=0.5,
+                    dt=0.02
+                )
+            else:
+                # default: plan full two-phase path
+                phase1 = hybrid_a_star_path(start, center, screen_cv)
+                phase2 = hybrid_a_star_path(phase1[-1], goal, screen_cv)
+                path = phase1 + phase2
+                resampled = smooth_and_resample(path, spacing_m=0.1)
+                v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
+                traj, times = parameterize_path_trapezoid(
+                    resampled,
+                    v0=v0,
+                    vf=4,
+                    v_max=6.0,
+                    a_max=0.5,
+                    dt=0.02
+                )
 
             self.pending_traj = traj
+            # planning finished
             self.planning_in_progress = False
-
             print("Planning finished in:", time.time() - stime)
 
         self.planning_thread = threading.Thread(target=worker, daemon=True)
