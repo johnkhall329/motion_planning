@@ -60,7 +60,7 @@ class P_RRTStar():
         :param start: Starting position for the algorithm. Must include x,y, and heading
         :param goal: Goal position for the algorithm. Only requires x,y
         :param r: Turning radius of car
-        :param step_size: Desired step size between nodes (IS NOT GUARUNTEED)
+        :param step_size: Desired step size between nodes (IS NOT GUARANTEED)
         :param max_samples: Max number of random samples for the algorithm to test
         :param v_update: Number of new nodes added before KD tree is rebuilt
         :param p_goal: Percentage of the random samples to be the goal

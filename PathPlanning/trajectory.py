@@ -573,16 +573,8 @@ def save_traj_to_csv(
     return filename
 
 def sanitize_rrt_path(path: np.ndarray,
-                      min_dist_px: float = 1.0,
+                      min_dist_px: float = 0.2,   # ✅ lowered default
                       recompute_heading: bool = True) -> np.ndarray:
-    """
-    Clean RRT output so it is spline- and controller-safe.
-    Removes:
-      - duplicate points
-      - zero-length edges
-      - local backtracking
-    Optionally recomputes heading from geometry.
-    """
 
     path = np.asarray(path, float)
 
@@ -594,7 +586,7 @@ def sanitize_rrt_path(path: np.ndarray,
     dy = np.diff(y)
     dist = np.hypot(dx, dy)
 
-    # Remove zero-length + near-zero segments
+    # ✅ Remove near-zero edges
     keep = dist > min_dist_px
     keep = np.insert(keep, 0, True)
 
@@ -603,18 +595,20 @@ def sanitize_rrt_path(path: np.ndarray,
     if h is not None:
         h = h[keep]
 
-    # OPTIONAL: recompute heading from geometry (strongly recommended for RRT)
+    # ✅ HARD SAFETY GUARD (this is what stops your crash)
+    if x.size < 2:
+        print("WARNING: sanitize_rrt_path collapsed trajectory — skipping filtering")
+        return path.copy()
+
+    # ✅ Safe heading recompute
     if recompute_heading:
         dx = np.gradient(x)
         dy = np.gradient(y)
 
-        # 0 = straight UP in your convention
         h = np.arctan2(dy, dx) - (np.pi / 2.0)
         h = (h + np.pi) % (2*np.pi) - np.pi
 
-    cleaned = np.vstack([x, y, h]).T
-    return cleaned
-
+    return np.vstack([x, y, h]).T
 
 
 if __name__ == "__main__":
@@ -624,15 +618,15 @@ if __name__ == "__main__":
 
     # If a hybrid path file exists, demonstrate the pipeline
     try:
-        # filepath = 'hybrid_astar_path.npy'
-        filepath = 'rrt_path.npy'
+        filepath = 'hybrid_astar_path.npy'
+        # filepath = 'rrt_path.npy'
         path = np.load(filepath)
 
         path = sanitize_rrt_path(path)
 
         resampled = smooth_and_resample(path, spacing_m=0.1)
         traj, times = parameterize_path_trapezoid(resampled,
-                                                  v0=5,
+                                                  v0=4,
                                                   vf=5,
                                                   v_max=6.0,
                                                   a_max=0.5,

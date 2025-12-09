@@ -14,7 +14,7 @@ from parameters import *
 from PathPlanning.hybrida_star import hybrid_a_star_path, dubins, Unconstrained
 from PathPlanning.p_rrt_star import P_RRTStar
 import PathPlanning.control as control
-from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid
+from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid, sanitize_rrt_path
 
 
 class CarState(Enum):
@@ -30,6 +30,8 @@ class MotionPlanner():
         self.spacing = spacing
         # Parameterized left-lane (holding / final) speed
         self.left_lane_speed = left_lane_speed
+
+        self.planner = "RRT" # A* or RRT
         
         self.K_x = 0.025
         self.K_xd = 0.1
@@ -158,31 +160,65 @@ class MotionPlanner():
             stime = time.time()
 
             start = (450.0, 450.0, 0.0)
-            center = (325.0, 250.0, 0.0)
+            if self.planner == "A*":
+                center = (325.0, 250.0, 0.0)
+            else:
+                center = (335.0, 250.0, 0.0)
             goal = (450.0, 25.0, 0.0)
             d2 = np.array(start) + np.array(goal) - np.array(center)
 
             v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
 
-            if phase_local == 1:
-                path = hybrid_a_star_path(start, center, screen_cv)
+            if self.planner == "RRT":
 
-            elif phase_local == 2:
-                path = hybrid_a_star_path(start, d2, screen_cv)
+                if phase_local == 1:
+                    rrt_planner = P_RRTStar(screen_cv, start, center[:2], TURNING_RADIUS//2, RESOLUTION, 1e5)
 
+                elif phase_local == 2:
+                    rrt_planner = P_RRTStar(screen_cv, start, d2[:2], TURNING_RADIUS//2, RESOLUTION, 1e5)
+                
+                else: raise Exception("How could this have even happened")
+
+                baseline, path = rrt_planner.p_rrt_star()
+                path = sanitize_rrt_path(path)
+
+            elif self.planner == "A*":
+                if phase_local == 1:
+                    path = hybrid_a_star_path(start, center, screen_cv)
+
+                elif phase_local == 2:
+                    path = hybrid_a_star_path(start, d2, screen_cv)
+
+                else:
+                    p1 = hybrid_a_star_path(start, center, screen_cv)
+                    p2 = hybrid_a_star_path(p1[-1], goal, screen_cv)
+                    path = p1 + p2
+            
             else:
-                p1 = hybrid_a_star_path(start, center, screen_cv)
-                p2 = hybrid_a_star_path(p1[-1], goal, screen_cv)
-                path = p1 + p2
+                raise ValueError("MotionPlanner.planner must be 'A*' or 'RRT'")
 
+            resampled = smooth_and_resample(path, spacing_m=0.1)
+            
             traj, times = parameterize_path_trapezoid(
-                smooth_and_resample(path, spacing_m=0.1),
+                resampled,
                 v0=v0,
                 vf=self.left_lane_speed,
                 v_max=6.0,
                 a_max=0.5,
                 dt=0.02
             )
+
+            if phase_local == 1:
+                np.save("data/pathR1.npy", path)
+                np.save("data/resampleR1.npy", resampled)
+                np.save("data/trajR1.npy", traj)
+            elif phase_local == 2:
+                np.save("data/pathR2.npy", path)
+                np.save("data/resampleR2.npy", resampled)
+                np.save("data/trajR2.npy", traj)
+
+            # Doesn't work on worker thread
+            # quick_visual_check(path, resampled, traj)
 
             self.pending_traj = traj
             self.pending_phase = phase_local
