@@ -185,7 +185,9 @@ def main():
         if keys[pygame.K_o]:
             print("Initializing overtake")
             overtaking = True
-            planner.prep_path_async(screen)
+            # Pass the traffic car's current y position as the intermediate waypoint
+            # and the ego car's current speed as the trajectory start speed.
+            planner.prep_path_async(screen, center_y=other_car.y, ego_speed=ego_car.speed)
 
 
         # --- Road scrolls with ego motion ---

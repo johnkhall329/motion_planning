@@ -99,8 +99,22 @@ class MotionPlanner():
         self.t_buffer = traj[:, 0]  # timestamps
         self.U_index = 0
 
-    def prep_path_async(self, screen):
-        """Launch path planning in a background thread."""
+    def prep_path_async(self, screen, center_y: float = None, ego_speed: float = None):
+        """Launch path planning in a background thread.
+
+        Parameters
+        ----------
+        screen : surface
+            Pygame screen surface (will be copied for CV processing).
+        center_y : float, optional
+            If provided, the intermediate waypoint's y coordinate (pixels) to use
+            when planning the two-phase hybrid A* path. If None, a default
+            value is used.
+        ego_speed : float, optional
+            If provided, the starting speed (v0, in m/s) to use when
+            parameterizing the trajectory. If None, falls back to
+            `self.idle_speed`.
+        """
 
         if self.planning_in_progress:
             print("Planner already running!")
@@ -117,8 +131,10 @@ class MotionPlanner():
             print("Planning started in background thread...")
             stime = time.time()
 
+            # determine waypoints; keep x fixed, allow center.y to be set
             start = (450.0, 450.0, 0.0)
-            center = (350.0, 240.0, 0.0)
+            c_y = center_y if center_y is not None else 240.0
+            center = (350.0, float(c_y), 0.0)
             goal = (450.0, 25.0, 0.0)
 
             phase1 = hybrid_a_star_path(start, center, screen_cv)
@@ -127,9 +143,10 @@ class MotionPlanner():
 
             resampled = smooth_and_resample(path, spacing_m=0.1)
 
+            v0 = float(ego_speed) if ego_speed is not None else float(self.idle_speed)
             traj, times = parameterize_path_trapezoid(
                 resampled,
-                v0=5,
+                v0=v0,
                 vf=4,
                 v_max=6.0,
                 a_max=0.5,
