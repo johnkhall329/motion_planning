@@ -171,7 +171,7 @@ def main():
 
                     if overtaking_phase == 1:
                         planner_state = 'passing'
-                        planner.idle_speed = 5.0
+                        planner.idle_speed = planner.left_lane_speed
                         planner.in_left_lane = True
 
                     elif overtaking_phase == 2:

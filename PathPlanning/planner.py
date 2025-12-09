@@ -23,11 +23,13 @@ class CarState(Enum):
 
 
 class MotionPlanner():
-    def __init__(self, idle_speed, idle_heading=0.0, spacing=250.0):
+    def __init__(self, idle_speed, idle_heading=0.0, spacing=250.0, left_lane_speed=5.0):
         self.state = CarState.IDLE
         self.idle_speed = idle_speed
         self.idle_heading = idle_heading
         self.spacing = spacing
+        # Parameterized left-lane (holding / final) speed
+        self.left_lane_speed = left_lane_speed
         
         self.K_x = 0.025
         self.K_xd = 0.1
@@ -76,7 +78,7 @@ class MotionPlanner():
                 - self.K_heading_i * self.I_heading
             )
 
-            target_speed_left = 5.0
+            target_speed_left = self.left_lane_speed
             a = self.K_v * (target_speed_left - ego.speed)
 
             theta = np.clip(theta, -10, 10)
@@ -176,7 +178,7 @@ class MotionPlanner():
             traj, times = parameterize_path_trapezoid(
                 smooth_and_resample(path, spacing_m=0.1),
                 v0=v0,
-                vf=5.0,
+                vf=self.left_lane_speed,
                 v_max=6.0,
                 a_max=0.5,
                 dt=0.02
