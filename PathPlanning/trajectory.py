@@ -395,6 +395,48 @@ def parameterize_path_trapezoid(resampled_path: np.ndarray,
     traj = np.vstack([t, x_ref, y_ref, h_ref, s_traj, v_traj]).T
     return traj, t
 
+def quick_path_compare_side_by_side(original_path_px: np.ndarray,
+                                     resampled_m: np.ndarray,
+                                     figsize: Tuple[int, int] = (10, 5),
+                                     show: bool = True):
+    """
+    Display original path (converted to meters) and resampled path
+    back-to-back (side-by-side) for easy visual comparison.
+    """
+    try:
+        import matplotlib.pyplot as plt
+    except Exception:
+        print("matplotlib not available; skipping visual check.")
+        return
+
+    # Convert original to meters for fair comparison
+    orig_m = path_pixels_to_meters(original_path_px)
+    x0, y0 = orig_m[:, 0], orig_m[:, 1]
+    xr, yr = resampled_m[:, 0], resampled_m[:, 1]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+
+    # -------- LEFT: ORIGINAL PATH --------
+    ax1.plot(x0, y0, '.', markersize=3)
+    ax1.set_title("Original Path (meters)")
+    ax1.set_xlabel("x (m)")
+    ax1.set_ylabel("y (m)")
+    ax1.axis('equal')
+    ax1.grid(True)
+
+    # -------- RIGHT: RESAMPLED PATH --------
+    ax2.plot(xr, yr, 'o-', markersize=3)
+    ax2.set_title("Smoothed / Resampled Path (meters)")
+    ax2.set_xlabel("x (m)")
+    ax2.set_ylabel("y (m)")
+    ax2.axis('equal')
+    ax2.grid(True)
+
+    fig.tight_layout()
+
+    if show:
+        plt.show()
+
 
 # ---- Example helper for quick checks + plotting ----
 def quick_visual_check(original_path_px: np.ndarray,
@@ -632,6 +674,7 @@ if __name__ == "__main__":
                                                   a_max=0.5,
                                                   dt=0.02)
         quick_visual_check(path, resampled, traj)
+        quick_path_compare_side_by_side(path, resampled)
     except FileNotFoundError:
         print("No example hybrid_astar_path.npy found; skip pipeline demo.")
 

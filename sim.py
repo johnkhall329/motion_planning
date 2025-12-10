@@ -20,7 +20,6 @@ from PathPlanning.planner import MotionPlanner
 
 FIXED_DT = 0.02   # ✅ CONTROL TIMESTEP (50 Hz)
 
-
 # -----------------------
 # Car Class (screen coords)
 # -----------------------
