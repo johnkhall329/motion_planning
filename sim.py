@@ -18,7 +18,7 @@ YELLOW = (255, 255, 0)
 from parameters import *
 from PathPlanning.planner import MotionPlanner
 
-FIXED_DT = 0.02   # ✅ CONTROL TIMESTEP (50 Hz)
+FIXED_DT = 0.02   # CONTROL TIMESTEP (50 Hz)
 
 # -----------------------
 # Car Class (screen coords)
@@ -175,7 +175,7 @@ def main():
 
                     elif overtaking_phase == 2:
                         planner_state = 'passed'
-                        planner.idle_speed = 4.0
+                        planner.idle_speed = 5.0
                         planner.in_left_lane = False
                         # clear full-uncancellable overtake mode when phase 2 completes
                         if full_overtake_active:
@@ -237,10 +237,11 @@ def main():
                 )
                 planner_state = 'planning2'
 
-        # Full (uncancellable) overtake: start entire maneuver with 'O'
+        # Full (uncancellable) A* overtake: start entire maneuver with 'O'
         if keys[pygame.K_o]:
             # Only trigger from the start state and if not already in full mode
             if (not full_overtake_active) and planner_state == 'start':
+                planner.planner = "A*"
                 # Begin phase 1 planning just like pressing 'A'
                 planner.prep_path_async(
                     screen,
@@ -250,7 +251,39 @@ def main():
                 )
                 planner_state = 'planning1'
                 full_overtake_active = True
+             
+        # Full (uncancellable) RRT overtake: start entire maneuver with 'P'        
+        if keys[pygame.K_p]:
+            # Only trigger from the start state and if not already in full mode
+            if (not full_overtake_active) and planner_state == 'start':
+                planner.planner = "RRT"
+                # Begin phase 1 planning just like pressing 'A'
+                planner.prep_path_async(
+                    screen,
+                    center_y=other_car.y,
+                    ego_speed=ego_car.speed,
+                    phase=1
+                )
+                planner_state = 'planning1'
+                full_overtake_active = True
+                
+        # Reset simulation and path planners with 'R'
+        if keys[pygame.K_r]:
+            lane_offset_x = 0.0
+            lane_offset_y = 0.0
+            
+            ego_car = Car(right_lane_x, int(SCREEN_HEIGHT * 0.75),
+                  speed=CAR_SPEED, color=BLUE)
 
+            other_car = Car(right_lane_x, SCREEN_HEIGHT * 0.25,
+                    speed=4.0, color=RED)
+
+            overtaking = False
+            planner_state = 'start'
+            overtaking_phase = 0
+            full_overtake_active = False
+
+            planner = MotionPlanner(5.0, 0.0)
         # -------------------------
         # DRAW
         # -------------------------

@@ -16,15 +16,8 @@ from PathPlanning.p_rrt_star import P_RRTStar
 import PathPlanning.control as control
 from PathPlanning.trajectory import smooth_and_resample, parameterize_path_trapezoid, sanitize_rrt_path
 
-
-class CarState(Enum):
-    IDLE = 'idle'
-    EXECUTING = 'ex'
-
-
 class MotionPlanner():
     def __init__(self, idle_speed, idle_heading=0.0, spacing=250.0, left_lane_speed=5.0):
-        self.state = CarState.IDLE
         self.idle_speed = idle_speed
         self.idle_heading = idle_heading
         self.spacing = spacing
@@ -83,7 +76,7 @@ class MotionPlanner():
             target_speed_left = self.left_lane_speed
             a = self.K_v * (target_speed_left - ego.speed)
 
-            theta = np.clip(theta, -10, 10)
+            theta = np.clip(theta, -1.5, 1.5)
             a = np.clip(a, -0.5, 0.5)
             return (theta, a)
 
@@ -102,7 +95,7 @@ class MotionPlanner():
 
         e_d = ego.y - nonego.y
 
-        a_speed = self.K_v * (self.idle_speed - ego.speed)
+        a_speed = self.K_v * (self.idle_speed - ego.speed) # bring car to idle speed
 
         if e_d < self.spacing and e_d > 0:
             self.I_v_rel += (ego.speed - nonego.speed) * dt
@@ -119,14 +112,14 @@ class MotionPlanner():
             )
 
         elif e_d < self.spacing and e_d > 0 and (ego.speed - nonego.speed) > 0:
-            a_dist = -0.5 * self.K_v_rel * (ego.speed - nonego.speed)
+            a_dist = -0.5 * self.K_v_rel * (ego.speed - nonego.speed) # Keep car at safe distance away from non-ego car
         else:
             self.I_v_rel = 0.0
             a_dist = 1e9
 
-        a = min(a_speed, a_dist)
+        a = min(a_speed, a_dist) # Take most conservative of two options
 
-        theta = np.clip(theta, -10, 10)
+        theta = np.clip(theta, -1.5, 1.5)
         a = np.clip(a, -0.5, 0.5)
 
         return (theta, a)
@@ -163,7 +156,7 @@ class MotionPlanner():
             if self.planner == "A*":
                 center = (325.0, 250.0, 0.0)
             else:
-                center = (335.0, 250.0, 0.0)
+                center = (340.0, 250.0, 0.0)
             goal = (450.0, 25.0, 0.0)
             d2 = np.array(start) + np.array(goal) - np.array(center)
 
@@ -208,14 +201,14 @@ class MotionPlanner():
                 dt=0.02
             )
 
-            if phase_local == 1:
-                np.save("data/pathR1.npy", path)
-                np.save("data/resampleR1.npy", resampled)
-                np.save("data/trajR1.npy", traj)
-            elif phase_local == 2:
-                np.save("data/pathR2.npy", path)
-                np.save("data/resampleR2.npy", resampled)
-                np.save("data/trajR2.npy", traj)
+            # if phase_local == 1:
+            #     np.save("data/pathR1.npy", path)
+            #     np.save("data/resampleR1.npy", resampled)
+            #     np.save("data/trajR1.npy", traj)
+            # elif phase_local == 2:
+            #     np.save("data/pathR2.npy", path)
+            #     np.save("data/resampleR2.npy", resampled)
+            #     np.save("data/trajR2.npy", traj)
 
             # Doesn't work on worker thread
             # quick_visual_check(path, resampled, traj)
