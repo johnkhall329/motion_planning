@@ -31,7 +31,7 @@ class MotionPlanner():
         # Parameterized left-lane (holding / final) speed
         self.left_lane_speed = left_lane_speed
 
-        self.planner = "RRT" # A* or RRT
+        self.planner = "A*" # A* or RRT
         
         self.K_x = 0.025
         self.K_xd = 0.1
